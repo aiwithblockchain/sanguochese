@@ -1,6 +1,9 @@
 # Xcode
 # gitignore contributors: remember to update Global/Xcode.gitignore, Objective-C.gitignore & Swift.gitignore
 
+## 参考工程（本地克隆，不纳入版本控制）
+docs/references/
+
 ## User settings
 xcuserdata/
 

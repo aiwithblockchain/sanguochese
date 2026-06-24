@@ -6,8 +6,19 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXContainerItemProxy section */
+		69EAC7A72FEC18B2005A5B36 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 69EAC6572FEC18B1005A5B36 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 69EAC65E2FEC18B2005A5B36;
+			remoteInfo = sanguochese;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		69EAC65F2FEC18B2005A5B36 /* sanguochese.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = sanguochese.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		69EAC7A02FEC18B2005A5B36 /* sanguocheseTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = sanguocheseTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -16,10 +27,22 @@
 			path = sanguochese;
 			sourceTree = "<group>";
 		};
+		69EAC7A12FEC18B2005A5B36 /* sanguocheseTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = sanguocheseTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		69EAC65C2FEC18B2005A5B36 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		69EAC7A22FEC18B2005A5B36 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -33,6 +56,7 @@
 			isa = PBXGroup;
 			children = (
 				69EAC6612FEC18B2005A5B36 /* sanguochese */,
+				69EAC7A12FEC18B2005A5B36 /* sanguocheseTests */,
 				69EAC6602FEC18B2005A5B36 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,6 +65,7 @@
 			isa = PBXGroup;
 			children = (
 				69EAC65F2FEC18B2005A5B36 /* sanguochese.app */,
+				69EAC7A02FEC18B2005A5B36 /* sanguocheseTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -70,6 +95,29 @@
 			productReference = 69EAC65F2FEC18B2005A5B36 /* sanguochese.app */;
 			productType = "com.apple.product-type.application";
 		};
+		69EAC7A32FEC18B2005A5B36 /* sanguocheseTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 69EAC7AA2FEC18B8005A5B36 /* Build configuration list for PBXNativeTarget "sanguocheseTests" */;
+			buildPhases = (
+				69EAC7A52FEC18B2005A5B36 /* Sources */,
+				69EAC7A22FEC18B2005A5B36 /* Frameworks */,
+				69EAC7A42FEC18B2005A5B36 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				69EAC7A62FEC18B2005A5B36 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				69EAC7A12FEC18B2005A5B36 /* sanguocheseTests */,
+			);
+			name = sanguocheseTests;
+			packageProductDependencies = (
+			);
+			productName = sanguocheseTests;
+			productReference = 69EAC7A02FEC18B2005A5B36 /* sanguocheseTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -82,6 +130,10 @@
 				TargetAttributes = {
 					69EAC65E2FEC18B2005A5B36 = {
 						CreatedOnToolsVersion = 26.3;
+					};
+					69EAC7A32FEC18B2005A5B36 = {
+						CreatedOnToolsVersion = 26.3;
+						TestTargetID = 69EAC65E2FEC18B2005A5B36;
 					};
 				};
 			};
@@ -100,12 +152,20 @@
 			projectRoot = "";
 			targets = (
 				69EAC65E2FEC18B2005A5B36 /* sanguochese */,
+				69EAC7A32FEC18B2005A5B36 /* sanguocheseTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		69EAC65D2FEC18B2005A5B36 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		69EAC7A42FEC18B2005A5B36 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -122,7 +182,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		69EAC7A52FEC18B2005A5B36 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		69EAC7A62FEC18B2005A5B36 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 69EAC65E2FEC18B2005A5B36 /* sanguochese */;
+			targetProxy = 69EAC7A72FEC18B2005A5B36 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		69EAC6742FEC18B8005A5B36 /* Debug */ = {
@@ -269,8 +344,6 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.meshnetprotocol.sanguochese;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
@@ -301,12 +374,54 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.meshnetprotocol.sanguochese;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		69EAC7A82FEC18B8005A5B36 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2XYK8RBB6M;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.meshnetprotocol.sanguocheseTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/sanguochese.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/sanguochese";
+			};
+			name = Debug;
+		};
+		69EAC7A92FEC18B8005A5B36 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2XYK8RBB6M;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.meshnetprotocol.sanguocheseTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/sanguochese.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/sanguochese";
 			};
 			name = Release;
 		};
@@ -327,6 +442,15 @@
 			buildConfigurations = (
 				69EAC6772FEC18B8005A5B36 /* Debug */,
 				69EAC6782FEC18B8005A5B36 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		69EAC7AA2FEC18B8005A5B36 /* Build configuration list for PBXNativeTarget "sanguocheseTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				69EAC7A82FEC18B8005A5B36 /* Debug */,
+				69EAC7A92FEC18B8005A5B36 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
