@@ -50,8 +50,7 @@ public enum SgGameFlow {
             let defeated = cap.nation
             // 两方模式：吃帅即终局，不吞并
             if board.mode.isTwoNation {
-                board.aliveNations.remove(defeated)
-                board.zobrist ^= SgZobrist.aliveKeys[defeated.rawValue]
+                board.markDefeated(defeated)
                 log("🏆 两方终局: \(mover.displayName) 吃掉 \(defeated.displayName) 主帅")
                 return .gameOver(winner: mover)
             }
@@ -129,8 +128,7 @@ public enum SgGameFlow {
             // 两方模式：无子可走即终局，不吞并
             if board.mode.isTwoNation {
                 let victor = board.aliveNations.first(where: { $0 != side }) ?? mover
-                board.aliveNations.remove(side)
-                board.zobrist ^= SgZobrist.aliveKeys[side.rawValue]
+                board.markDefeated(side)
                 log("🏆 两方终局: \(side.displayName) 无子可走，\(victor.displayName) 胜")
                 return .gameOver(winner: victor)
             }

@@ -224,4 +224,11 @@ public final class SgBoard {
             pieces[pos] = nil
         }
     }
+
+    /// 标记一国灭国但不吞并（2 人模式终局用）。
+    /// 仅移出 aliveNations 并更新 Zobrist，不改色、不登记 annexed。
+    public func markDefeated(_ nation: SgNation) {
+        aliveNations.remove(nation)
+        zobrist ^= SgZobrist.aliveKeys[nation.rawValue]
+    }
 }
