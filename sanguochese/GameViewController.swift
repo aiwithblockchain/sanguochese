@@ -25,12 +25,32 @@ class GameViewController: UIViewController {
     /// 解说视角阵营
     var commentarySide: SgNation = .shu
 
+    /// 当前已呈现的 scene（避免重复 present）
+    private var scenePresented = false
+
+    /// 覆盖 loadView：把根视图设为 SKView，否则默认 UIView 会导致
+    /// `view as? SKView` 失败 → 黑屏。
+    override func loadView() {
+        self.view = SKView()
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
+        // 视图尺寸在 viewDidLoad 阶段可能仍为 0（模态全屏 present），
+        // 真正的 scene 创建放到 viewDidLayoutSubviews。
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        guard !scenePresented else { return }
+        let bounds = self.view.bounds
+        // 等待非零尺寸
+        guard bounds.width > 0 && bounds.height > 0 else { return }
+        scenePresented = true
 
         guard let skView = self.view as? SKView else { return }
 
-        let scene = GameScene(size: skView.bounds.size)
+        let scene = GameScene(size: bounds.size)
         scene.scaleMode = .aspectFill
         scene.humanSides = humanSides
         scene.aiDifficulty = aiDifficulty
@@ -41,8 +61,8 @@ class GameViewController: UIViewController {
 
         skView.presentScene(scene)
         skView.ignoresSiblingOrder = true
-        skView.showsFPS = true
-        skView.showsNodeCount = true
+        skView.showsFPS = false
+        skView.showsNodeCount = false
     }
 
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
