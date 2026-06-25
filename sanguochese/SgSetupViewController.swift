@@ -5,9 +5,9 @@
 //  开局设置 · 统一入口（2 人标准象棋 / 3 人三国象棋）
 //
 //  顶层选择玩法：
-//    - 2 人对弈（标准中国象棋，红/黑）
+//    - 2 人对弈（标准中国象棋规则，在三国棋盘上取两方对局）
 //    - 3 人对弈（三国象棋，魏/蜀/吴）
-//  根据玩法显示不同选项，确认后分别创建 TnGameViewController / GameViewController。
+//  统一创建 GameViewController，通过 SgGameMode 区分。
 //
 // 3 人模式选项：
 //    - 对战模式：人人对战 / 人机对战
@@ -17,7 +17,7 @@
 //
 // 2 人模式选项：
 //    - 对战模式：人机对战 / 人人对战
-//    - 玩家方（人机模式）：红 / 黑
+//    - 玩家方（人机模式）：魏 / 蜀 / 吴（对手自动取下一国）
 //    - AI 难度：简单 / 普通 / 困难 / 专家
 //
 
@@ -27,16 +27,12 @@ class SgSetupViewController: UIViewController {
 
     /// 当前玩法
     private var gameMode: GameMode = .threePlayer
-    /// 选中的玩家阵营（3 人人机模式）。默认蜀。
+    /// 选中的玩家阵营（3 人人机模式 / 2 人人机模式）。默认蜀。
     private var selectedHumanSide: SgNation = .shu
-    /// 2 人模式：人类方。默认红。
-    private var selectedHumanColor: TnColor = .red
     /// 是否人人对战
     private var isHumanVsHuman = false
-    /// 3 人 AI 难度
+    /// AI 难度（2 人 / 3 人共用）
     private var difficulty: SgDifficulty = .normal
-    /// 2 人 AI 难度
-    private var tnDifficulty: TnDifficulty = .normal
     /// 是否启用 AI 解说（仅 3 人）
     private var commentaryEnabled = false
     /// DeepSeek API Key（空 = 解说走兜底文案）
@@ -118,13 +114,13 @@ class SgSetupViewController: UIViewController {
         switch gameMode {
         case .twoPlayer:
             dynamicContainer.addArrangedSubview(makeTitleLabel("对战模式"))
-            dynamicContainer.addArrangedSubview(makeTnModeSegment())
+            dynamicContainer.addArrangedSubview(makeModeSegment())
 
-            dynamicContainer.addArrangedSubview(makeTitleLabel("玩家方"))
-            dynamicContainer.addArrangedSubview(makeTnColorPicker())
+            dynamicContainer.addArrangedSubview(makeTitleLabel("玩家方（对手自动取下一国）"))
+            dynamicContainer.addArrangedSubview(makeNationPicker())
 
             dynamicContainer.addArrangedSubview(makeTitleLabel("AI 难度"))
-            dynamicContainer.addArrangedSubview(makeTnDifficultySegment())
+            dynamicContainer.addArrangedSubview(makeDifficultySegment())
 
         case .threePlayer:
             dynamicContainer.addArrangedSubview(makeTitleLabel("对战模式"))
@@ -142,7 +138,7 @@ class SgSetupViewController: UIViewController {
         }
     }
 
-    // MARK: - 3 人模式
+    // MARK: - 对战模式（2 人 / 3 人共用）
 
     private func makeModeSegment() -> UISegmentedControl {
         let seg = UISegmentedControl(items: ["人机对战", "人人对战"])
@@ -155,7 +151,7 @@ class SgSetupViewController: UIViewController {
         isHumanVsHuman = s.selectedSegmentIndex == 1
     }
 
-    // MARK: - 阵营选择（3 人）
+    // MARK: - 阵营选择（2 人 / 3 人共用）
 
     private func makeNationPicker() -> UIStackView {
         let stack = UIStackView()
@@ -179,7 +175,7 @@ class SgSetupViewController: UIViewController {
         }
     }
 
-    // MARK: - 难度（3 人）
+    // MARK: - 难度（2 人 / 3 人共用）
 
     private func makeDifficultySegment() -> UISegmentedControl {
         let seg = UISegmentedControl(items: SgDifficulty.allCases.map { $0.displayName })
@@ -194,7 +190,7 @@ class SgSetupViewController: UIViewController {
         }
     }
 
-    // MARK: - 解说开关（3 人）
+    // MARK: - 解说开关（仅 3 人）
 
     private func makeCommentarySwitch() -> UISwitch {
         let sw = UISwitch()
@@ -224,54 +220,6 @@ class SgSetupViewController: UIViewController {
         apiKey = f.text ?? ""
     }
 
-    // MARK: - 2 人模式
-
-    private func makeTnModeSegment() -> UISegmentedControl {
-        let seg = UISegmentedControl(items: ["人机对战", "人人对战"])
-        seg.selectedSegmentIndex = isHumanVsHuman ? 1 : 0
-        seg.addTarget(self, action: #selector(tnModeChanged(_:)), for: .valueChanged)
-        return seg
-    }
-
-    @objc private func tnModeChanged(_ s: UISegmentedControl) {
-        isHumanVsHuman = s.selectedSegmentIndex == 1
-    }
-
-    private func makeTnColorPicker() -> UIStackView {
-        let stack = UIStackView()
-        stack.axis = .horizontal
-        stack.distribution = .fillEqually
-        stack.spacing = 12
-        for color in [TnColor.red, .black] {
-            let btn = TnColorButton(color: color)
-            btn.addTarget(self, action: #selector(tnColorTapped(_:)), for: .touchUpInside)
-            stack.addArrangedSubview(btn)
-        }
-        // 默认选中红
-        (stack.arrangedSubviews.first { ($0 as? TnColorButton)?.color == .red } as? TnColorButton)?.isSelected = true
-        return stack
-    }
-
-    @objc private func tnColorTapped(_ sender: TnColorButton) {
-        selectedHumanColor = sender.color
-        for case let btn as TnColorButton in sender.superview?.subviews ?? [] {
-            btn.isSelected = (btn === sender)
-        }
-    }
-
-    private func makeTnDifficultySegment() -> UISegmentedControl {
-        let seg = UISegmentedControl(items: TnDifficulty.allCases.map { $0.displayName })
-        seg.selectedSegmentIndex = tnDifficulty.rawValue
-        seg.addTarget(self, action: #selector(tnDifficultyChanged(_:)), for: .valueChanged)
-        return seg
-    }
-
-    @objc private func tnDifficultyChanged(_ s: UISegmentedControl) {
-        if let d = TnDifficulty(rawValue: s.selectedSegmentIndex) {
-            tnDifficulty = d
-        }
-    }
-
     // MARK: - 开始按钮
 
     private func makeStartButton() -> UIButton {
@@ -295,18 +243,28 @@ class SgSetupViewController: UIViewController {
         }
     }
 
+    /// 2 人模式：human 与 ai = human.next() 两方对局。
+    /// 人人对战时两方都由人类操作。
     private func startTwoPlayerGame() {
-        let vc = TnGameViewController()
-        vc.humanColors = isHumanVsHuman ? [.red, .black] : [selectedHumanColor]
-        vc.aiDifficulty = tnDifficulty
-        // 视角：人机模式以玩家方在下方；人人对战默认红方在下（nil）
-        vc.perspectiveColor = isHumanVsHuman ? nil : selectedHumanColor
-        vc.modalPresentationStyle = .fullScreen
-        present(vc, animated: true)
+        let human = selectedHumanSide
+        let ai = human.next()
+        let gameVC = GameViewController()
+        gameVC.gameMode = .twoNation(human: human, ai: ai)
+        if isHumanVsHuman {
+            gameVC.humanSides = [human, ai]
+        } else {
+            gameVC.humanSides = [human]
+        }
+        gameVC.aiDifficulty = difficulty
+        // 视角：人机模式以玩家方为下方；人人对战默认 nil
+        gameVC.perspectiveSide = isHumanVsHuman ? nil : human
+        gameVC.modalPresentationStyle = .fullScreen
+        present(gameVC, animated: true)
     }
 
     private func startThreePlayerGame() {
         let gameVC = GameViewController()
+        gameVC.gameMode = .threeNation
         gameVC.humanSides = isHumanVsHuman ? [.wei, .shu, .wu] : [selectedHumanSide]
         gameVC.aiDifficulty = difficulty
         gameVC.commentaryEnabled = commentaryEnabled
@@ -329,7 +287,7 @@ class SgSetupViewController: UIViewController {
     }
 }
 
-// MARK: - NationButton（3 人）
+// MARK: - NationButton（2 人 / 3 人共用）
 
 private class NationButton: UIButton {
     let nation: SgNation
@@ -366,46 +324,6 @@ private class NationButton: UIButton {
             backgroundColor = .white
             setTitleColor(nationColor, for: .normal)
             layer.borderColor = nationColor.withAlphaComponent(0.4).cgColor
-        }
-    }
-}
-
-// MARK: - TnColorButton（2 人）
-
-private class TnColorButton: UIButton {
-    let color: TnColor
-    private let btnColor: UIColor
-
-    init(color: TnColor) {
-        self.color = color
-        switch color {
-        case .red:   btnColor = UIColor(red: 0.85, green: 0.20, blue: 0.20, alpha: 1.0)
-        case .black: btnColor = UIColor(white: 0.15, alpha: 1.0)
-        }
-        super.init(frame: .zero)
-        setTitle("\(color.displayName) 方", for: .normal)
-        titleLabel?.font = UIFont.systemFont(ofSize: 17, weight: .medium)
-        layer.cornerRadius = 10
-        layer.borderWidth = 2
-        heightAnchor.constraint(equalToConstant: 52).isActive = true
-        updateAppearance()
-    }
-
-    required init?(coder: NSCoder) { fatalError() }
-
-    override var isSelected: Bool {
-        didSet { updateAppearance() }
-    }
-
-    private func updateAppearance() {
-        if isSelected {
-            backgroundColor = btnColor
-            setTitleColor(.white, for: .normal)
-            layer.borderColor = btnColor.cgColor
-        } else {
-            backgroundColor = .white
-            setTitleColor(btnColor, for: .normal)
-            layer.borderColor = btnColor.withAlphaComponent(0.4).cgColor
         }
     }
 }

@@ -30,6 +30,9 @@ class GameScene: SKScene {
     var humanSides: Set<SgNation> = []
     /// AI 难度
     var aiDifficulty: SgDifficulty = .normal
+    /// 对局模式（三方 / 两方）。默认三方。
+    /// 必须在 presentScene 前由 GameViewController 注入。
+    var gameMode: SgGameMode = .threeNation
     /// AI 是否正在思考（防止重入）
     private var aiThinking = false
 
@@ -62,11 +65,21 @@ class GameScene: SKScene {
         self.backgroundColor = SKColor(white: 0.92, alpha: 1.0)
         self.scaleMode = .aspectFill
 
+        // 按模式初始化棋盘
+        switch gameMode {
+        case .threeNation:
+            board = SgLayout.initialBoard()
+        case .twoNation(let human, let ai):
+            board = SgLayout.initialBoard(human: human, ai: ai)
+        }
+
         // 根据场景尺寸自适应格子大小
         let side = min(self.size.width, self.size.height)
         // 棋盘直径 ≈ 2·boardRadius，留 15% 边距 + 顶部状态栏空间
         let cellSize = side / (2.0 * (9.0 * CGFloat(3).squareRoot() / 6.0 + 4.0) * 1.15)
-        renderer = SgBoardRenderer(cellSize: cellSize, perspectiveNation: perspectiveSide)
+        renderer = SgBoardRenderer(cellSize: cellSize,
+                                   perspectiveNation: perspectiveSide,
+                                   aliveNations: board.aliveNations)
 
         // 把棋盘根节点放到场景中心
         renderer.boardRoot.position = CGPoint(x: self.size.width / 2, y: self.size.height / 2)
@@ -232,7 +245,7 @@ class GameScene: SKScene {
         label.text = "「\(role.displayName)沉思中…」"
         label.alpha = 1.0
         bridge.commentate(prompt: prompt, role: role) { [weak self] text in
-            guard let self = self else { return }
+            guard self != nil else { return }
             label.text = "「\(text)」"
             label.alpha = 0
             label.run(SKAction.sequence([

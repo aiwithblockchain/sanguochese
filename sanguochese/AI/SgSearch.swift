@@ -462,7 +462,7 @@ public enum SgSearch {
         var bestMove: SgMove? = nil
         var raisedAlpha = false
 
-        for move in ordered {
+        for (i, move) in ordered.enumerated() {
             let ateKing = board.piece(at: move.to)?.type == .king
             var childPV: [SgMove] = []
             let score: Int
@@ -478,10 +478,25 @@ public enum SgSearch {
                 }
                 Snapshot.restore(snapshot, to: board)
             } else {
-                let rec = board.make(move)
-                score = -alphabeta(board: board, rootSide: rootSide, depth: depth - 1,
-                                   alpha: -b, beta: -a, pv: &childPV, context: context)
-                board.unmake(rec)
+                // A-3 LMR（Late Move Reduction）：排序靠后且不吃子的走法先以减深搜索，
+                // 若超过 α 再用全深重搜。仅两方阶段启用。
+                if context != nil, depth >= 3, i >= 3, board.piece(at: move.to) == nil {
+                    let rec = board.make(move)
+                    let reduced = depth - 2
+                    var lmrScore = -alphabeta(board: board, rootSide: rootSide, depth: reduced,
+                                              alpha: -b, beta: -a, pv: &childPV, context: context)
+                    if lmrScore > a {
+                        lmrScore = -alphabeta(board: board, rootSide: rootSide, depth: depth - 1,
+                                              alpha: -b, beta: -a, pv: &childPV, context: context)
+                    }
+                    board.unmake(rec)
+                    score = lmrScore
+                } else {
+                    let rec = board.make(move)
+                    score = -alphabeta(board: board, rootSide: rootSide, depth: depth - 1,
+                                       alpha: -b, beta: -a, pv: &childPV, context: context)
+                    board.unmake(rec)
+                }
             }
 
             if score > best {

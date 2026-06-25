@@ -21,6 +21,10 @@ public final class SgBoard {
     /// 当前轮到哪一方走子
     public var sideToMove: SgNation = .wei
 
+    /// 对局模式（三方 / 两方）。默认三方。
+    /// 决定终局判定、几何分叉过滤与 UI 渲染。
+    public var mode: SgGameMode = .threeNation
+
     /// 设置当前回合方，同步增量更新 Zobrist。
     /// SgGameFlow.advanceTurn 及搜索层应使用此方法而非直接赋值 sideToMove。
     public func setSideToMove(_ side: SgNation) {
@@ -45,6 +49,7 @@ public final class SgBoard {
     public init(copy other: SgBoard) {
         self.pieces = other.pieces
         self.sideToMove = other.sideToMove
+        self.mode = other.mode
         self.aliveNations = other.aliveNations
         self.annexed = other.annexed
         self.zobrist = other.zobrist

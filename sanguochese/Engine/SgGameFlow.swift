@@ -48,6 +48,13 @@ public enum SgGameFlow {
         // P4-1 / P4-2：吃到主帅 → 触发吞并
         if let cap = captured, cap.type == .king {
             let defeated = cap.nation
+            // 两方模式：吃帅即终局，不吞并
+            if board.mode.isTwoNation {
+                board.aliveNations.remove(defeated)
+                board.zobrist ^= SgZobrist.aliveKeys[defeated.rawValue]
+                log("🏆 两方终局: \(mover.displayName) 吃掉 \(defeated.displayName) 主帅")
+                return .gameOver(winner: mover)
+            }
             log("🎯 吃帅灭国: \(mover.displayName) 吃掉 \(defeated.displayName) 主帅，触发吞并")
             board.annex(defeated: defeated, by: mover)
             if board.aliveNations.count == 1 {
@@ -66,6 +73,16 @@ public enum SgGameFlow {
 
     /// 当前整体游戏结果
     public static func result(of board: SgBoard) -> SgGameResult {
+        // 两方模式：任一方主帅不在 → 对方胜
+        if board.mode.isTwoNation {
+            for nation in board.aliveNations {
+                if board.kingPos(of: nation) == nil {
+                    let winner = board.aliveNations.first(where: { $0 != nation }) ?? nation
+                    return .gameOver(winner: winner)
+                }
+            }
+            return .ongoing
+        }
         if board.aliveNations.count == 1, let w = board.aliveNations.first {
             return .gameOver(winner: w)
         }
@@ -109,6 +126,14 @@ public enum SgGameFlow {
 
         // P4-4 无子可走判负
         if SgLegality.hasNoLegalMoves(side: side, on: board) {
+            // 两方模式：无子可走即终局，不吞并
+            if board.mode.isTwoNation {
+                let victor = board.aliveNations.first(where: { $0 != side }) ?? mover
+                board.aliveNations.remove(side)
+                board.zobrist ^= SgZobrist.aliveKeys[side.rawValue]
+                log("🏆 两方终局: \(side.displayName) 无子可走，\(victor.displayName) 胜")
+                return .gameOver(winner: victor)
+            }
             // 致因方：默认归当前进攻方（mover）；若 mover 已亡则取剩余存活方
             let victor = board.isAlive(mover) ? mover : board.aliveNations.first(where: { $0 != side }) ?? mover
             board.annex(defeated: side, by: victor)

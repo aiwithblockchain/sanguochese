@@ -17,6 +17,7 @@ public enum SgLayout {
     /// 生成三方初始棋盘
     public static func initialBoard() -> SgBoard {
         let board = SgBoard()
+        board.mode = .threeNation
         for nation in SgNation.allCases {
             place(for: nation, on: board)
         }
@@ -29,15 +30,14 @@ public enum SgLayout {
     /// 只摆 human 与 ai 两方，第三方地盘留空且不加入 aliveNations。
     public static func initialBoard(human: SgNation, ai: SgNation) -> SgBoard {
         let board = SgBoard()
+        board.mode = .twoNation(human: human, ai: ai)
         place(for: human, on: board)
         place(for: ai, on: board)
         // 第三方不存活、不参与
-        let third: SgNation = SgNation.allCases.first { $0 != human && $0 != ai }!
         board.setAliveNationsForTesting([human, ai])
         // 回合顺序：按 rawValue 小者先走（魏→蜀→吴 序）
         board.sideToMove = [human, ai].min(by: { $0.rawValue < $1.rawValue })!
         board.recomputeZobrist()
-        _ = third
         return board
     }
 

@@ -37,8 +37,12 @@ public final class SgBoardRenderer {
         .wu:  SKColor(red: 0.20, green: 0.70, blue: 0.40, alpha: 1.0),
     ]
 
-    public init(cellSize: CGFloat, perspectiveNation: SgNation? = nil) {
+    /// 需要绘制地盘的国家集合（2 人模式只画两方，第三方瓣留空）。
+    private let aliveNations: Set<SgNation>
+
+    public init(cellSize: CGFloat, perspectiveNation: SgNation? = nil, aliveNations: Set<SgNation> = Set(SgNation.allCases)) {
         self.mapper = SgCoordMapper(cellSize: cellSize, perspectiveNation: perspectiveNation)
+        self.aliveNations = aliveNations
         boardRoot.addChild(gridLayer)
         boardRoot.addChild(forkedLayer)
         boardRoot.addChild(highlightLayer)
@@ -64,7 +68,7 @@ public final class SgBoardRenderer {
 
     /// 绘制三瓣地盘网格、九宫斜线、国界边。只画一次。
     private func drawGrid() {
-        for nation in SgNation.allCases {
+        for nation in SgNation.allCases where aliveNations.contains(nation) {
             drawTerritory(for: nation)
         }
         drawCentralTriangle()
@@ -181,7 +185,7 @@ public final class SgBoardRenderer {
 
         for file in 1...9 {
             let start = mapper.screenPos(for: SgPos(nation: side, file: file, rank: 5))
-            for enemy in side.opponents() {
+            for enemy in side.opponents() where aliveNations.contains(enemy) {
                 let end = mapper.screenPos(for: SgPos(nation: enemy, file: 10 - file, rank: 5))
                 drawDashedLine(from: start, to: end,
                                color: dashColor, width: dashWidth,

@@ -18,6 +18,8 @@ class GameViewController: UIViewController {
     var humanSides: Set<SgNation> = []
     /// AI 难度
     var aiDifficulty: SgDifficulty = .normal
+    /// 对局模式（三方 / 两方）。默认三方。
+    var gameMode: SgGameMode = .threeNation
     /// 是否启用 AI 解说
     var commentaryEnabled: Bool = false
     /// DeepSeek API Key（空 = 解说走兜底文案）
@@ -54,6 +56,7 @@ class GameViewController: UIViewController {
 
         let scene = GameScene(size: bounds.size)
         scene.scaleMode = .aspectFill
+        scene.gameMode = gameMode
         scene.humanSides = humanSides
         scene.aiDifficulty = aiDifficulty
         scene.commentarySide = commentarySide

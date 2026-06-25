@@ -35,16 +35,17 @@ public enum SgGeometry {
     // MARK: - 单步移动
 
     /// 向前（OUT）走一步。返回 1 或 2 个结果（在国界处分叉成 2 条）。
-    /// - 在己方领土：rank 递增；rank==5 时分叉到 2 个敌国。
+    /// - 在己方领土：rank 递增；rank==5 时分叉到存活敌国。
     /// - 在敌国领土：rank 递减（朝敌底线）；rank==1 时无法继续。
-    public static func stepOut(from pos: SgPos, owner: SgNation) -> [SgPos] {
+    /// - alive：当前存活国家集合，用于过滤国界分叉目标（2 人模式只分叉到 1 个敌国）。
+    public static func stepOut(from pos: SgPos, owner: SgNation, alive: Set<SgNation> = Set(SgNation.allCases)) -> [SgPos] {
         if pos.nation == owner {
             // 己方领土：前进 = rank 递增
             if pos.rank < 5 {
                 return [SgPos(nation: pos.nation, file: pos.file, rank: pos.rank + 1)]
             }
-            // rank == 5：过国界，分叉到两个敌国
-            return pos.nation.opponents().map { enemy in
+            // rank == 5：过国界，分叉到存活的敌国
+            return pos.nation.opponents().filter { alive.contains($0) }.map { enemy in
                 SgPos(nation: enemy, file: 10 - pos.file, rank: 5)
             }
         } else {
@@ -84,9 +85,10 @@ public enum SgGeometry {
     // MARK: - 射线生成（用于车、炮等滑行棋子）
 
     /// OUT（前进）方向的射线。可能分叉成多条（在国界处）。
-    /// - 己方领土：rank+1...5 → 分叉到 2 个敌国（各 rank 5→1）。
+    /// - 己方领土：rank+1...5 → 分叉到存活敌国（各 rank 5→1）。
     /// - 敌国领土：rank-1...1，单条射线，不分叉。
-    public static func outRays(from pos: SgPos, owner: SgNation) -> [[SgPos]] {
+    /// - alive：当前存活国家集合，过滤分叉目标。
+    public static func outRays(from pos: SgPos, owner: SgNation, alive: Set<SgNation> = Set(SgNation.allCases)) -> [[SgPos]] {
         if pos.nation == owner {
             // 己方领土：前进到国界后分叉
             var rays: [[SgPos]] = []
@@ -95,7 +97,7 @@ public enum SgGeometry {
                     SgPos(nation: pos.nation, file: pos.file, rank: r)
                 }
                 : []
-            for enemy in pos.nation.opponents() {
+            for enemy in pos.nation.opponents() where alive.contains(enemy) {
                 let enemyFile = 10 - pos.file
                 let enemyPart: [SgPos] = stride(from: 5, through: 1, by: -1).map { r in
                     SgPos(nation: enemy, file: enemyFile, rank: r)
@@ -115,8 +117,9 @@ public enum SgGeometry {
 
     /// IN（后退）方向的射线。可能分叉成多条（在敌国国界处）。
     /// - 己方领土：rank-1...1，单条射线，不分叉。
-    /// - 敌国领土：rank+1...5 → 分叉到 2 个国家（各 rank 5→1）。
-    public static func inRays(from pos: SgPos, owner: SgNation) -> [[SgPos]] {
+    /// - 敌国领土：rank+1...5 → 分叉到存活国家（各 rank 5→1）。
+    /// - alive：当前存活国家集合，过滤分叉目标。
+    public static func inRays(from pos: SgPos, owner: SgNation, alive: Set<SgNation> = Set(SgNation.allCases)) -> [[SgPos]] {
         if pos.nation == owner {
             // 己方领土：朝己方底线，不分叉
             guard pos.rank > 1 else { return [] }
@@ -132,8 +135,8 @@ public enum SgGeometry {
                     SgPos(nation: pos.nation, file: pos.file, rank: r)
                 }
                 : []
-            // 分叉到当前所在国的两个对手国（其中一个可能是 owner——撤回本国）
-            for other in pos.nation.opponents() {
+            // 分叉到当前所在国的存活对手国（其中一个可能是 owner——撤回本国）
+            for other in pos.nation.opponents() where alive.contains(other) {
                 let otherFile = 10 - pos.file
                 let otherPart: [SgPos] = stride(from: 5, through: 1, by: -1).map { r in
                     SgPos(nation: other, file: otherFile, rank: r)

@@ -62,12 +62,13 @@ public enum SgMoveGen {
     /// OUT 与 IN 方向在国界处都会分叉成 2 条射线。
     static func rookMoves(at pos: SgPos, owner: SgNation, on board: SgBoard) -> [SgMove] {
         var moves: [SgMove] = []
+        let alive = board.aliveNations
         // OUT（前进，分叉）
-        for ray in SgGeometry.outRays(from: pos, owner: owner) {
+        for ray in SgGeometry.outRays(from: pos, owner: owner, alive: alive) {
             moves.append(contentsOf: slidingMoves(on: ray, from: pos, owner: owner, board: board))
         }
         // IN（后退，分叉）
-        for ray in SgGeometry.inRays(from: pos, owner: owner) {
+        for ray in SgGeometry.inRays(from: pos, owner: owner, alive: alive) {
             moves.append(contentsOf: slidingMoves(on: ray, from: pos, owner: owner, board: board))
         }
         // LEFT / RIGHT（横向，不过国界）
@@ -99,9 +100,10 @@ public enum SgMoveGen {
     /// 每个分叉方向独立判炮架子。
     static func cannonMoves(at pos: SgPos, owner: SgNation, on board: SgBoard) -> [SgMove] {
         var moves: [SgMove] = []
+        let alive = board.aliveNations
         let rays: [[SgPos]] =
-            SgGeometry.outRays(from: pos, owner: owner) +
-            SgGeometry.inRays(from: pos, owner: owner) +
+            SgGeometry.outRays(from: pos, owner: owner, alive: alive) +
+            SgGeometry.inRays(from: pos, owner: owner, alive: alive) +
             [SgGeometry.leftRay(from: pos), SgGeometry.rightRay(from: pos)]
         for ray in rays {
             moves.append(contentsOf: cannonRayMoves(on: ray, from: pos, owner: owner, board: board))
@@ -136,7 +138,7 @@ public enum SgMoveGen {
     /// 蹩腿按所选方向独立判定（三国象棋独有：往 A 蹩、往 B 不蹩）。
     static func knightMoves(at pos: SgPos, owner: SgNation, on board: SgBoard) -> [SgMove] {
         var moves: [SgMove] = []
-        let candidates: [(target: SgPos, leg: SgPos?)] = knightTargets(from: pos, owner: owner)
+        let candidates: [(target: SgPos, leg: SgPos?)] = knightTargets(from: pos, owner: owner, alive: board.aliveNations)
         for (target, leg) in candidates {
             // 蹩腿：腿格上有任何棋子则不能跳
             if let leg = leg, board.piece(at: leg) != nil { continue }
@@ -150,9 +152,9 @@ public enum SgMoveGen {
     /// 蹩腿格 = 直走一步的邻点（OUT/IN/LEFT/RIGHT 各一）。
     /// 目标 = 从腿再走一步同方向 + 一步垂直方向（即"日"字：2 步主方向 + 1 步垂直）。
     /// 过国界时 OUT/IN 邻点会分叉，每个分叉邻点作为独立的马腿。
-    static func knightTargets(from pos: SgPos, owner: SgNation) -> [(target: SgPos, leg: SgPos?)] {
+    static func knightTargets(from pos: SgPos, owner: SgNation, alive: Set<SgNation> = Set(SgNation.allCases)) -> [(target: SgPos, leg: SgPos?)] {
         // 4 个直走邻点（马腿候选）。OUT/IN 在国界处可能分叉成多个。
-        let outSteps = SgGeometry.stepOut(from: pos, owner: owner)   // 0/1/2 个
+        let outSteps = SgGeometry.stepOut(from: pos, owner: owner, alive: alive)   // 0/1/2 个
         let inSteps: [SgPos] = {
             if let s = SgGeometry.stepIn(from: pos, owner: owner) { return [s] }
             return []
@@ -164,7 +166,7 @@ public enum SgMoveGen {
 
         // 以"OUT 邻点"为腿：从腿再 OUT 一步，然后 LEFT/RIGHT 一步 → 2 个日字目标
         for leg in outSteps {
-            for mid in SgGeometry.stepOut(from: leg, owner: owner) {
+            for mid in SgGeometry.stepOut(from: leg, owner: owner, alive: alive) {
                 if let t = SgGeometry.stepLeft(from: mid) {
                     results.append((t, leg))
                 }
@@ -187,7 +189,7 @@ public enum SgMoveGen {
         // 以"LEFT 邻点"为腿：从腿再 LEFT 一步，然后 OUT/IN 一步 → 2 个日字目标
         if let leg = leftStep {
             if let mid = SgGeometry.stepLeft(from: leg) {
-                for t in SgGeometry.stepOut(from: mid, owner: owner) {
+                for t in SgGeometry.stepOut(from: mid, owner: owner, alive: alive) {
                     results.append((t, leg))
                 }
                 if let t = SgGeometry.stepIn(from: mid, owner: owner) {
@@ -198,7 +200,7 @@ public enum SgMoveGen {
         // 以"RIGHT 邻点"为腿：从腿再 RIGHT 一步，然后 OUT/IN 一步 → 2 个日字目标
         if let leg = rightStep {
             if let mid = SgGeometry.stepRight(from: leg) {
-                for t in SgGeometry.stepOut(from: mid, owner: owner) {
+                for t in SgGeometry.stepOut(from: mid, owner: owner, alive: alive) {
                     results.append((t, leg))
                 }
                 if let t = SgGeometry.stepIn(from: mid, owner: owner) {
@@ -291,7 +293,7 @@ public enum SgMoveGen {
         let crossed = pos.nation != owner
 
         // 前进（OUT 方向，可能分叉）
-        for target in SgGeometry.stepOut(from: pos, owner: owner) {
+        for target in SgGeometry.stepOut(from: pos, owner: owner, alive: board.aliveNations) {
             if let occ = board.piece(at: target), occ.nation == owner { continue }
             moves.append(SgMove(from: pos, to: target))
         }

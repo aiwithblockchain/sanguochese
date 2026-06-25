@@ -121,6 +121,106 @@ final class SgAITests: XCTestCase {
         XCTAssertTrue(legal.contains(move))
     }
 
+    // MARK: - A-2 两方模式（SgGameMode.twoNation）
+
+    func testTwoNationModeInitialBoardHasTwoAliveNations() {
+        let board = SgLayout.initialBoard(human: .wei, ai: .shu)
+        XCTAssertEqual(board.aliveNations, [.wei, .shu])
+        XCTAssertEqual(board.mode, .twoNation(human: .wei, ai: .shu))
+        // 第三方（吴）不应有任何棋子
+        XCTAssertTrue(board.positions(of: .wu).isEmpty)
+    }
+
+    func testTwoNationModeGeometryForksToSingleEnemy() {
+        // 2 人模式：车在己方国界 (rank 5) 应只分叉到 1 个敌国（而非 2 个）
+        let board = SgLayout.initialBoard(human: .wei, ai: .shu)
+        let alive = board.aliveNations
+        // 魏方 file 5 rank 5 的 OUT 射线应只有 1 条（到蜀）
+        let rays = SgGeometry.outRays(from: SgPos(nation: .wei, file: 5, rank: 5),
+                                      owner: .wei, alive: alive)
+        XCTAssertEqual(rays.count, 1, "2 人模式国界分叉应只到 1 个敌国")
+        // 该射线应进入蜀国
+        XCTAssertTrue(rays[0].contains { $0.nation == .shu })
+    }
+
+    func testTwoNationModeKingCaptureEndsGame() {
+        // 2 人模式：吃帅直接终局，不吞并
+        let board = SgLayout.initialBoard(human: .wei, ai: .shu)
+        // 构造魏车能吃蜀帅的局面
+        board.pieces[SgPos(nation: .shu, file: 5, rank: 1)] = SgPiece(type: .king, nation: .shu)
+        board.pieces[SgPos(nation: .shu, file: 5, rank: 3)] = SgPiece(type: .rook, nation: .wei)
+        board.sideToMove = .wei
+        let outcome = SgGameFlow.play(SgMove(from: SgPos(nation: .shu, file: 5, rank: 3),
+                                              to: SgPos(nation: .shu, file: 5, rank: 1)),
+                                       on: board)
+        if case .gameOver(let winner) = outcome {
+            XCTAssertEqual(winner, .wei)
+        } else {
+            XCTFail("2 人模式吃帅应直接终局，实际: \(outcome)")
+        }
+        // 蜀方不应被吞并（annexed 应为空）
+        XCTAssertTrue(board.annexed.isEmpty, "2 人模式不应触发吞并")
+    }
+
+    func testTwoNationModeResultDetectsKingAbsence() {
+        let board = SgLayout.initialBoard(human: .wei, ai: .shu)
+        // 移除蜀帅
+        if let kp = board.kingPos(of: .shu) {
+            board.pieces[kp] = nil
+        }
+        let result = SgGameFlow.result(of: board)
+        if case .gameOver(let winner) = result {
+            XCTAssertEqual(winner, .wei)
+        } else {
+            XCTFail("主帅缺失应判定终局")
+        }
+    }
+
+    func testTwoNationModeSearchUsesAlphabeta() {
+        // 2 人模式搜索应走 αβ 路径（aliveNations.count == 2）
+        let board = SgLayout.initialBoard(human: .wei, ai: .shu)
+        let result = SgSearch.chooseMove(for: .wei, on: board, difficulty: .hard)
+        XCTAssertNotNil(result.move, "2 人模式搜索应返回走法")
+        if let move = result.move {
+            let legal = SgLegality.legalMoves(for: .wei, on: board)
+            XCTAssertTrue(legal.contains(move), "2 人模式搜索走法应合法")
+        }
+    }
+
+    // MARK: - A-3 PST 评估
+
+    func testPawnTableGivesBonusForCrossedPawn() {
+        // 过河兵（在敌国领土）应比未过河兵得分高
+        let board = SgBoard()
+        board.mode = .twoNation(human: .wei, ai: .shu)
+        board.setAliveNationsForTesting([.wei, .shu])
+        // 未过河兵：魏兵在己方 rank 4
+        let ownPawn = SgPiece(type: .pawn, nation: .wei)
+        let ownPos = SgPos(nation: .wei, file: 5, rank: 4)
+        // 过河兵：魏兵在蜀国 rank 5（刚过河）
+        let crossedPawn = SgPiece(type: .pawn, nation: .wei)
+        let crossedPos = SgPos(nation: .shu, file: 5, rank: 5)
+        let ownBonus = SgEvaluator.positionBonus(piece: ownPawn, at: ownPos, side: .wei)
+        let crossedBonus = SgEvaluator.positionBonus(piece: crossedPawn, at: crossedPos, side: .wei)
+        XCTAssertGreaterThan(crossedBonus, ownBonus,
+                             "过河兵位置加成应高于未过河兵")
+    }
+
+    func testLogicalPosMapping() {
+        // 己方半盘映射
+        let ownPiece = SgPiece(type: .rook, nation: .wei)
+        let ownPos = SgPos(nation: .wei, file: 1, rank: 1)
+        let ownLP = SgEvaluator.logicalPos(piece: ownPiece, at: ownPos, side: .wei)
+        XCTAssertEqual(ownLP.file, 0)
+        XCTAssertEqual(ownLP.rank, 0)
+        // 敌方半盘映射：file 翻转 (9-file)，rank 翻转 (10-rank)
+        let enemyPiece = SgPiece(type: .rook, nation: .wei)
+        let enemyPos = SgPos(nation: .shu, file: 1, rank: 1)
+        let enemyLP = SgEvaluator.logicalPos(piece: enemyPiece, at: enemyPos, side: .wei)
+        XCTAssertEqual(enemyLP.file, 8)
+        XCTAssertEqual(enemyLP.rank, 9)
+    }
+
     // MARK: - 灭国后搜索切换
 
     func testSearchHandlesAnnexedState() {
