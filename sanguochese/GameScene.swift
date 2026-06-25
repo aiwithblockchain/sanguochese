@@ -2,15 +2,15 @@
 //  GameScene.swift
 //  sanguochese
 //
-//  三国象棋 · 主场景 (P2 棋盘渲染 + P3 人人对战)
+//  三国象棋 · 主场景 (P2 棋盘渲染 + P3 人人对战 + P5 人机对战 + P6 AI 解说)
 //
 //  职责：
 //    - 持有 SgBoard 规则状态与 SgBoardRenderer 渲染器
 //    - 处理点击：选中棋子 / 高亮合法走法 / 执行走子
 //    - 回合轮转 魏→蜀→吴
 //    - 顶部状态栏显示当前回合方
-//
-//  本阶段不含灭国吞并结算（P4），仅跑通走子循环。
+//    - P5：AI 方自动走子（后台搜索 + 主线程落子）
+//    - P6：每步走子后异步生成角色化解说，底部气泡展示
 //
 
 import SpriteKit
@@ -23,6 +23,23 @@ class GameScene: SKScene {
     private var board: SgBoard = SgLayout.initialBoard()
     private var renderer: SgBoardRenderer!
 
+    // MARK: - AI 配置 (P5)
+
+    /// 玩家阵营：这些方由人类操作。其余存活方由 AI 接管。
+    /// 默认空集合 = 人人对战（P3 模式）。
+    var humanSides: Set<SgNation> = []
+    /// AI 难度
+    var aiDifficulty: SgDifficulty = .normal
+    /// AI 是否正在思考（防止重入）
+    private var aiThinking = false
+
+    // MARK: - 解说配置 (P6)
+
+    /// DeepSeek 解说桥接（nil = 不启用解说）
+    var commentaryBridge: SgDeepSeekBridge?
+    /// 玩家阵营（用于选择解说者）；人人对战时取魏方视角
+    var commentarySide: SgNation = .shu
+
     // MARK: - 交互状态
 
     private var selectedPos: SgPos?
@@ -31,6 +48,7 @@ class GameScene: SKScene {
     // MARK: - UI 节点
 
     private var statusLabel: SKLabelNode!
+    private var commentaryLabel: SKLabelNode?
     private var boardRoot: SKNode { renderer.boardRoot }
 
     // MARK: - 生命周期
@@ -58,15 +76,33 @@ class GameScene: SKScene {
         statusLabel.verticalAlignmentMode = .center
         addChild(statusLabel)
 
+        // 解说气泡（底部）
+        if commentaryBridge != nil {
+            let label = SKLabelNode(text: "")
+            label.fontName = "PingFangSC-Regular"
+            label.fontSize = 16
+            label.fontColor = SKColor(white: 0.25, alpha: 1.0)
+            label.position = CGPoint(x: self.size.width / 2, y: 36)
+            label.verticalAlignmentMode = .center
+            label.zPosition = 100
+            label.numberOfLines = 0
+            addChild(label)
+            commentaryLabel = label
+        }
+
         renderer.refreshPieces(from: board)
         updateStatus()
+        // 首回合若 AI 先走（玩家未选魏方），触发 AI
+        triggerAIIfNeeded()
     }
 
     // MARK: - 状态栏
 
     private func updateStatus() {
         let side = board.sideToMove
-        statusLabel.text = "\(side.displayName)方走子"
+        let isHuman = humanSides.contains(side)
+        let prefix = isHuman ? "" : "[AI] "
+        statusLabel.text = "\(prefix)\(side.displayName)方走子"
         statusLabel.fontColor = renderer.color(for: side)
     }
 
@@ -87,10 +123,12 @@ class GameScene: SKScene {
     }
 
     private func handleTap(at pos: SgPos) {
+        // AI 回合不响应人类点击
+        if !humanSides.contains(board.sideToMove) { return }
         let piece = board.piece(at: pos)
 
         // 已选中棋子时
-        if let from = selectedPos {
+        if selectedPos != nil {
             // 点到合法走法目标 → 执行走子
             if let move = legalForSelected.first(where: { $0.to == pos }) {
                 executeMove(move)
@@ -128,34 +166,130 @@ class GameScene: SKScene {
         renderer.clearHighlights()
     }
 
-    // MARK: - 走子执行 (P3-3 / P3-4)
+    // MARK: - 走子执行 (P3-3 / P3-4 / P4 结算)
 
     private func executeMove(_ move: SgMove) {
         let from = move.from
-        // 规则层执行
-        let captured = board.apply(move)
-        // 视觉动画
+        // 走子方必须在 play 之前记录（play 后 sideToMove 已轮转）
+        let mover = board.sideToMove
+        // 视觉动画先走（基于 apply 前的棋子位置）
         renderer.clearHighlights()
         renderer.select(nil)
         selectedPos = nil
         legalForSelected = []
 
+        // 规则层 + 结算（含吞并/清空/终局）
+        let outcome = SgGameFlow.play(move, on: board)
+
+        // P6：异步生成解说（不阻塞动画）
+        requestCommentary(for: move, mover: mover)
+
         renderer.animateMove(from: from, to: move.to) { [weak self] in
             guard let self = self else { return }
-            // 动画结束后重建棋子层（吃子需移除被吃节点）
             self.renderer.refreshPieces(from: self.board)
-            // 回合轮转
-            self.advanceTurn()
+            self.handleOutcome(outcome)
         }
     }
 
-    private func advanceTurn() {
-        // P3 阶段：简单的回合轮转。灭国判定留给 P4。
-        board.sideToMove = board.sideToMove.next()
-        // 跳过已灭国方（P4 之前不会发生，但保持健壮）
-        while !board.isAlive(board.sideToMove) {
-            board.sideToMove = board.sideToMove.next()
+    /// P6：请求解说（异步）
+    private func requestCommentary(for move: SgMove, mover: SgNation) {
+        guard let bridge = commentaryBridge, let label = commentaryLabel else { return }
+        let situation = SgBoardDescriber.describe(board: board, lastMove: move)
+        let moveText = "刚走：\(mover.displayName)方 \(move.description)"
+        let isPlayer = humanSides.contains(mover)
+        // 解说者：玩家方用谋士视角，AI 方用其君主视角
+        let role: SgRole
+        if isPlayer {
+            role = SgRole.commentator(for: commentarySide)
+        } else {
+            role = SgRole.monarch(of: mover)
         }
+        let prompt = SgRolePrompt.build(role: role,
+                                        situation: situation,
+                                        moveText: moveText,
+                                        isPlayerMove: isPlayer)
+        label.text = "「\(role.displayName)沉思中…」"
+        label.alpha = 1.0
+        bridge.commentate(prompt: prompt, role: role) { [weak self] text in
+            guard let self = self else { return }
+            label.text = "「\(text)」"
+            label.alpha = 0
+            label.run(SKAction.sequence([
+                SKAction.fadeIn(withDuration: 0.3),
+                SKAction.wait(forDuration: 4.0),
+                SKAction.fadeOut(withDuration: 0.6)
+            ]))
+        }
+    }
+
+    // MARK: - AI 走子 (P5-6)
+
+    /// 若当前回合方是 AI，后台搜索并落子。
+    private func triggerAIIfNeeded() {
+        guard !aiThinking else { return }
+        let side = board.sideToMove
+        guard !humanSides.contains(side) else { return }
+        guard case .ongoing = SgGameFlow.result(of: board) else { return }
+
+        aiThinking = true
         updateStatus()
+
+        // 拷贝棋盘在后台线程搜索，避免阻塞渲染。
+        let searchBoard = SgBoard(copy: board)
+        let difficulty = aiDifficulty
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let result = SgSearch.chooseMove(for: side,
+                                             on: searchBoard,
+                                             difficulty: difficulty)
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.aiThinking = false
+                guard let move = result.move else { return }
+                // 确保局面未被人类在等待期间改动（AI 回合人类无法点击，简单信任）
+                self.executeMove(move)
+            }
+        }
+    }
+
+    private func handleOutcome(_ outcome: SgMoveOutcome) {
+        switch outcome {
+        case .ongoing:
+            updateStatus()
+            triggerAIIfNeeded()
+        case .annexed(let defeated, let victor):
+            flashBanner("⚡ \(defeated.displayName)国灭，归\(victor.displayName)方")
+            updateStatus()
+            triggerAIIfNeeded()
+        case .cleared(let defeated):
+            flashBanner("💨 \(defeated.displayName)国消极，清空灭国")
+            updateStatus()
+            triggerAIIfNeeded()
+        case .noMovesDefeated(let defeated, let victor):
+            flashBanner("困毙：\(defeated.displayName)国无路可走，归\(victor.displayName)方")
+            updateStatus()
+            triggerAIIfNeeded()
+        case .gameOver(let winner):
+            flashBanner("🏆 \(winner.displayName)方一统天下！")
+            statusLabel.text = "🏆 \(winner.displayName)方获胜"
+            statusLabel.fontColor = renderer.color(for: winner)
+        }
+    }
+
+    private func flashBanner(_ text: String) {
+        let banner = SKLabelNode(text: text)
+        banner.fontName = "PingFangSC-Semibold"
+        banner.fontSize = 24
+        banner.fontColor = SKColor(white: 0.15, alpha: 1.0)
+        banner.position = CGPoint(x: self.size.width / 2, y: self.size.height - 70)
+        banner.verticalAlignmentMode = .center
+        banner.zPosition = 100
+        banner.alpha = 0
+        addChild(banner)
+        banner.run(SKAction.sequence([
+            SKAction.fadeIn(withDuration: 0.2),
+            SKAction.wait(forDuration: 1.6),
+            SKAction.fadeOut(withDuration: 0.6),
+            SKAction.removeFromParent()
+        ]))
     }
 }

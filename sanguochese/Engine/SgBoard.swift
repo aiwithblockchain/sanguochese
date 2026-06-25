@@ -37,6 +37,30 @@ public final class SgBoard {
         self.annexed = other.annexed
     }
 
+    // MARK: - 测试用直接设置（仅用于构造已灭国等测试局面）
+
+    /// 直接设置存活国家集合（测试用）。
+    public func setAliveNationsForTesting(_ nations: Set<SgNation>) {
+        aliveNations = nations
+    }
+
+    /// 直接登记吞并关系（测试用）。
+    public func setAnnexedForTesting(_ map: [SgNation: SgNation]) {
+        annexed = map
+    }
+
+    /// 搜索快照恢复用：一次性还原 pieces/sideToMove/aliveNations/annexed。
+    /// 仅供 AI 搜索层在 play/restore 循环中使用。
+    public func restoreSnapshot(pieces: [SgPos: SgPiece],
+                                sideToMove: SgNation,
+                                aliveNations: Set<SgNation>,
+                                annexed: [SgNation: SgNation]) {
+        self.pieces = pieces
+        self.sideToMove = sideToMove
+        self.aliveNations = aliveNations
+        self.annexed = annexed
+    }
+
     // MARK: - 查询
 
     /// 某格上的棋子（nil 表示空）

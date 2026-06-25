@@ -265,7 +265,15 @@ public enum SgMoveGen {
 
     /// 兵：过国界前只前进；过国界后激活横走。
     /// 前进方向 = OUT（以 owner 为基准）。过国界后 OUT 变为在敌国坐标系中朝其底线。
+    ///
+    /// P4-3：兵卒在亡国地盘上（pos.nation 被 owner 吞并）时，前进方向重定义 ——
+    /// 朝亡国国界（rank 递增）推进，到国界后分叉到剩余敌对国，不再沿亡国原方向。
     static func pawnMoves(at pos: SgPos, owner: SgNation, on board: SgBoard) -> [SgMove] {
+        // P4-3：亡国地盘上的收编兵卒
+        if let conqueror = board.annexed[pos.nation], conqueror == owner {
+            return pawnMovesOnConqueredTerritory(at: pos, owner: owner, on: board)
+        }
+
         var moves: [SgMove] = []
         let crossed = pos.nation != owner
 
@@ -282,6 +290,35 @@ public enum SgMoveGen {
                 if let occ = board.piece(at: t), occ.nation == owner { continue }
                 moves.append(SgMove(from: pos, to: t))
             }
+        }
+        return moves
+    }
+
+    /// P4-3：亡国地盘上的收编兵卒走法。
+    /// 前进 = 朝亡国国界（rank 递增）；在国界处分叉到剩余敌对国（alive 且 ≠ owner）。
+    /// 已过河（不在 owner 原始本土）→ 可横走。
+    private static func pawnMovesOnConqueredTerritory(at pos: SgPos, owner: SgNation, on board: SgBoard) -> [SgMove] {
+        var moves: [SgMove] = []
+
+        let forwardSteps: [SgPos]
+        if pos.rank < 5 {
+            // 朝亡国国界前进一步
+            forwardSteps = [SgPos(nation: pos.nation, file: pos.file, rank: pos.rank + 1)]
+        } else {
+            // 已在亡国国界：分叉到剩余敌对国（翻转对接 file → 10−file，落到敌国 rank 5）
+            let remainingEnemies = board.aliveNations.filter { $0 != owner }
+            forwardSteps = remainingEnemies.map { SgPos(nation: $0, file: 10 - pos.file, rank: 5) }
+        }
+        for target in forwardSteps {
+            if let occ = board.piece(at: target), occ.nation == owner { continue }
+            moves.append(SgMove(from: pos, to: target))
+        }
+
+        // 横走（已过河）
+        for target in [SgGeometry.stepLeft(from: pos), SgGeometry.stepRight(from: pos)] {
+            guard let t = target else { continue }
+            if let occ = board.piece(at: t), occ.nation == owner { continue }
+            moves.append(SgMove(from: pos, to: t))
         }
         return moves
     }
