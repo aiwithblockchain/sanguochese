@@ -83,7 +83,7 @@ public enum SgGameFlow {
             guardCount += 1
             if guardCount > 3 { return }  // 安全保护
         }
-        board.sideToMove = s
+        board.setSideToMove(s)
     }
 
     // MARK: - 结算当前应走方

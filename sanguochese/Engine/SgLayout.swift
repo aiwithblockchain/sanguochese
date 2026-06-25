@@ -21,6 +21,23 @@ public enum SgLayout {
             place(for: nation, on: board)
         }
         board.sideToMove = .wei
+        board.recomputeZobrist()
+        return board
+    }
+
+    /// 生成两方初始棋盘（1v1 模式）。
+    /// 只摆 human 与 ai 两方，第三方地盘留空且不加入 aliveNations。
+    public static func initialBoard(human: SgNation, ai: SgNation) -> SgBoard {
+        let board = SgBoard()
+        place(for: human, on: board)
+        place(for: ai, on: board)
+        // 第三方不存活、不参与
+        let third: SgNation = SgNation.allCases.first { $0 != human && $0 != ai }!
+        board.setAliveNationsForTesting([human, ai])
+        // 回合顺序：按 rawValue 小者先走（魏→蜀→吴 序）
+        board.sideToMove = [human, ai].min(by: { $0.rawValue < $1.rawValue })!
+        board.recomputeZobrist()
+        _ = third
         return board
     }
 

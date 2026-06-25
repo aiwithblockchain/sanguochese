@@ -2,7 +2,7 @@
 //  SgSearch.swift
 //  sanguochese
 //
-//  三国象棋 · 搜索引擎 (P5-2 / P5-3 / P5-4 / P5-5 / P7-1)
+//  三国象棋 · 搜索引擎 (P5-2 / P5-3 / P5-4 / P5-5 / P7-1 / 重构 v1.0)
 //
 //  分阶段混合策略：
 //    - 三国阶段（3 方存活）：Paranoid search
@@ -10,11 +10,12 @@
 //    - 两方阶段（灭国后）：标准 αβ。
 //    - 吞并突变（P5-4）：在 play 之后若存活方数变化，重新评估并降维。
 //
-//  P7-1 性能优化：
-//    - 置换表（SgTranspositionTable + SgZobrist）
-//    - 迭代加深（从深度 1 递增到目标深度，用上一轮 PV 排序）
-//    - 杀手走法（每个深度槽记 2 个引起 β cutoff 的走法）
-//    - 历史启发（to 格 × from 格 的命中计数排序）
+//  重构 v1.0（2026-06-25）：
+//    - make/unmake 增量走子替代全量快照（O(1) 走子回滚）
+//    - 增量 Zobrist（board.zobrist，O(0) 哈希读取）
+//    - quiescence 静态搜索（吃子延伸，消除 horizon effect）
+//    - 评估函数去掉 legalMoves 调用
+//    - 吞并路径仍走 Snapshot（少见事件，不污染主路径性能）
 //
 
 import Foundation
@@ -194,7 +195,7 @@ public enum SgSearch {
                                     moves: moves,
                                     context: context,
                                     pvHint: lastResult.principalVariation)
-            if let m = result.move {
+            if result.move != nil {
                 lastResult = result
             }
             // 软时限：每轮若超过 1.5s 则停止加深（近似，避免 UI 卡顿）
@@ -234,32 +235,36 @@ public enum SgSearch {
         let beta = Int.max - 1
 
         for move in ordered {
-            let snapshot = Snapshot.take(from: board)
-            let outcome = SgGameFlow.play(move, on: board)
-
-            var childPV: [SgMove] = []
+            // 吞并路径：若走法吃帅，走 Snapshot（吞并会改 aliveNations/annexed）
+            // 否则走 make/unmake（O(1) 增量）
+            let ateKing = board.piece(at: move.to)?.type == .king
             let score: Int
-            if case .gameOver(let winner) = outcome {
-                score = terminalScore(for: side, winner: winner)
-            } else if isThreeNation {
-                score = -paranoid(board: board,
-                                  rootSide: side,
-                                  depth: depth - 1,
-                                  alpha: -beta,
-                                  beta: -alpha,
-                                  pv: &childPV,
-                                  context: context)
-            } else {
-                score = -alphabeta(board: board,
-                                   rootSide: side,
-                                   depth: depth - 1,
-                                   alpha: -beta,
-                                   beta: -alpha,
-                                   pv: &childPV,
-                                   context: context)
-            }
+            var childPV: [SgMove] = []
 
-            Snapshot.restore(snapshot, to: board)
+            if ateKing {
+                let snapshot = Snapshot.take(from: board)
+                let outcome = SgGameFlow.play(move, on: board)
+                if case .gameOver(let winner) = outcome {
+                    score = terminalScore(for: side, winner: winner)
+                } else if isThreeNation {
+                    score = -paranoid(board: board, rootSide: side, depth: depth - 1,
+                                      alpha: -beta, beta: -alpha, pv: &childPV, context: context)
+                } else {
+                    score = -alphabeta(board: board, rootSide: side, depth: depth - 1,
+                                       alpha: -beta, beta: -alpha, pv: &childPV, context: context)
+                }
+                Snapshot.restore(snapshot, to: board)
+            } else {
+                let rec = board.make(move)
+                if isThreeNation {
+                    score = -paranoid(board: board, rootSide: side, depth: depth - 1,
+                                      alpha: -beta, beta: -alpha, pv: &childPV, context: context)
+                } else {
+                    score = -alphabeta(board: board, rootSide: side, depth: depth - 1,
+                                       alpha: -beta, beta: -alpha, pv: &childPV, context: context)
+                }
+                board.unmake(rec)
+            }
 
             if score > bestScore {
                 bestScore = score
@@ -273,8 +278,7 @@ public enum SgSearch {
 
         // 存入置换表
         if let ctx = context {
-            let hash = SgZobrist.hash(of: board)
-            ctx.tt.store(SgTTEntry(key: hash,
+            ctx.tt.store(SgTTEntry(key: board.zobrist,
                                    depth: depth,
                                    score: bestScore,
                                    flag: .exact,
@@ -307,11 +311,12 @@ public enum SgSearch {
             return terminalScore(for: rootSide, winner: winner)
         }
         if depth <= 0 {
-            return relativeScore(for: rootSide, on: board)
+            return quiescence(board: board, rootSide: rootSide,
+                              alpha: alpha, beta: beta, context: context)
         }
 
-        // P7-1：置换表查询
-        let hash = SgZobrist.hash(of: board)
+        // P7-1：置换表查询（用增量 zobrist）
+        let hash = board.zobrist
         if let ctx = context, let entry = ctx.tt.probe(hash) {
             if entry.depth >= depth {
                 switch entry.flag {
@@ -341,28 +346,32 @@ public enum SgSearch {
         let ordered = orderMoves(moves, on: board, context: context, depth: depth,
                                   ttMove: context?.tt.probe(hash)?.bestMove)
         var a = alpha
-        var b = beta
+        let b = beta
         var best = Int.min + 1
         var bestMove: SgMove? = nil
         var raisedAlpha = false
 
         for move in ordered {
-            let snapshot = Snapshot.take(from: board)
-            let outcome = SgGameFlow.play(move, on: board)
+            let ateKing = board.piece(at: move.to)?.type == .king
             var childPV: [SgMove] = []
             let score: Int
-            if case .gameOver(let winner) = outcome {
-                score = terminalScore(for: rootSide, winner: winner)
+
+            if ateKing {
+                let snapshot = Snapshot.take(from: board)
+                let outcome = SgGameFlow.play(move, on: board)
+                if case .gameOver(let winner) = outcome {
+                    score = terminalScore(for: rootSide, winner: winner)
+                } else {
+                    score = -paranoid(board: board, rootSide: rootSide, depth: depth - 1,
+                                      alpha: -b, beta: -a, pv: &childPV, context: context)
+                }
+                Snapshot.restore(snapshot, to: board)
             } else {
-                score = -paranoid(board: board,
-                                  rootSide: rootSide,
-                                  depth: depth - 1,
-                                  alpha: -b,
-                                  beta: -a,
-                                  pv: &childPV,
-                                  context: context)
+                let rec = board.make(move)
+                score = -paranoid(board: board, rootSide: rootSide, depth: depth - 1,
+                                  alpha: -b, beta: -a, pv: &childPV, context: context)
+                board.unmake(rec)
             }
-            Snapshot.restore(snapshot, to: board)
 
             if score > best {
                 best = score
@@ -413,11 +422,12 @@ public enum SgSearch {
             return terminalScore(for: rootSide, winner: winner)
         }
         if depth <= 0 {
-            return relativeScore(for: rootSide, on: board)
+            return quiescence(board: board, rootSide: rootSide,
+                              alpha: alpha, beta: beta, context: context)
         }
 
-        // P7-1：置换表查询
-        let hash = SgZobrist.hash(of: board)
+        // P7-1：置换表查询（用增量 zobrist）
+        let hash = board.zobrist
         if let ctx = context, let entry = ctx.tt.probe(hash) {
             if entry.depth >= depth {
                 switch entry.flag {
@@ -447,28 +457,32 @@ public enum SgSearch {
         let ordered = orderMoves(moves, on: board, context: context, depth: depth,
                                   ttMove: context?.tt.probe(hash)?.bestMove)
         var a = alpha
-        var b = beta
+        let b = beta
         var best = Int.min + 1
         var bestMove: SgMove? = nil
         var raisedAlpha = false
 
         for move in ordered {
-            let snapshot = Snapshot.take(from: board)
-            let outcome = SgGameFlow.play(move, on: board)
+            let ateKing = board.piece(at: move.to)?.type == .king
             var childPV: [SgMove] = []
             let score: Int
-            if case .gameOver(let winner) = outcome {
-                score = terminalScore(for: rootSide, winner: winner)
+
+            if ateKing {
+                let snapshot = Snapshot.take(from: board)
+                let outcome = SgGameFlow.play(move, on: board)
+                if case .gameOver(let winner) = outcome {
+                    score = terminalScore(for: rootSide, winner: winner)
+                } else {
+                    score = -alphabeta(board: board, rootSide: rootSide, depth: depth - 1,
+                                       alpha: -b, beta: -a, pv: &childPV, context: context)
+                }
+                Snapshot.restore(snapshot, to: board)
             } else {
-                score = -alphabeta(board: board,
-                                   rootSide: rootSide,
-                                   depth: depth - 1,
-                                   alpha: -b,
-                                   beta: -a,
-                                   pv: &childPV,
-                                   context: context)
+                let rec = board.make(move)
+                score = -alphabeta(board: board, rootSide: rootSide, depth: depth - 1,
+                                   alpha: -b, beta: -a, pv: &childPV, context: context)
+                board.unmake(rec)
             }
-            Snapshot.restore(snapshot, to: board)
 
             if score > best {
                 best = score
@@ -498,6 +512,67 @@ public enum SgSearch {
                                     flag: flag, bestMove: bestMove))
         }
         return best
+    }
+
+    // MARK: - Quiescence 静态搜索（重构 v1.0）
+    //
+    // 在 depth=0 时不直接返回评估，而是延伸吃子序列，
+    // 消除 horizon effect（刚好吃亏的走法被当成好走法）。
+    // 只延伸吃子走法（含吃帅），避免无限延伸。
+    //
+    static func quiescence(board: SgBoard,
+                           rootSide: SgNation,
+                           alpha: Int,
+                           beta: Int,
+                           context: SgSearchContext?) -> Int {
+        // 终局判定
+        if case .gameOver(let winner) = SgGameFlow.result(of: board) {
+            return terminalScore(for: rootSide, winner: winner)
+        }
+
+        // stand-pat：当前局面的静态评估
+        let standPat = relativeScore(for: rootSide, on: board)
+        var alpha = alpha
+        if standPat >= beta { return beta }
+        if standPat > alpha { alpha = standPat }
+
+        // 只生成吃子走法
+        let side = board.sideToMove
+        let captures = SgLegality.legalCaptures(for: side, on: board)
+        if captures.isEmpty {
+            return alpha
+        }
+
+        // 吃子走法按 MVV-LVA 排序
+        let ordered = orderMoves(captures, on: board, context: context, depth: 0,
+                                  ttMove: nil)
+        let b = beta
+
+        for move in ordered {
+            let ateKing = board.piece(at: move.to)?.type == .king
+            let score: Int
+
+            if ateKing {
+                let snapshot = Snapshot.take(from: board)
+                let outcome = SgGameFlow.play(move, on: board)
+                if case .gameOver(let winner) = outcome {
+                    score = terminalScore(for: rootSide, winner: winner)
+                } else {
+                    score = -quiescence(board: board, rootSide: rootSide,
+                                        alpha: -b, beta: -alpha, context: context)
+                }
+                Snapshot.restore(snapshot, to: board)
+            } else {
+                let rec = board.make(move)
+                score = -quiescence(board: board, rootSide: rootSide,
+                                    alpha: -b, beta: -alpha, context: context)
+                board.unmake(rec)
+            }
+
+            if score >= beta { return beta }
+            if score > alpha { alpha = score }
+        }
+        return alpha
     }
 
     // MARK: - 评估与终局
@@ -558,21 +633,25 @@ public enum SgSearch {
         return 0
     }
 
-    // MARK: - 快照（替代 apply/undo，因为 SgGameFlow.play 会改变 aliveNations/annexed）
-
-    /// 由于 SgGameFlow.play 会修改 aliveNations/annexed（apply/undo 不处理这些），
-    /// 搜索中需要完整快照-恢复。
+    // MARK: - 快照（吞并路径专用）
+    //
+    // 主搜索路径已改用 make/unmake（O(1) 增量走子）。
+    // 但吃帅触发吞并时，SgGameFlow.play 会修改 aliveNations/annexed，
+    // make/unmake 不处理这些——因此吞并路径仍走 Snapshot 全量恢复。
+    // 吞并是少见事件，性能影响可接受。
     struct Snapshot {
         let pieces: [SgPos: SgPiece]
         let sideToMove: SgNation
         let aliveNations: Set<SgNation>
         let annexed: [SgNation: SgNation]
+        let zobrist: UInt64
 
         static func take(from board: SgBoard) -> Snapshot {
             return Snapshot(pieces: board.pieces,
                             sideToMove: board.sideToMove,
                             aliveNations: board.aliveNations,
-                            annexed: board.annexed)
+                            annexed: board.annexed,
+                            zobrist: board.zobrist)
         }
 
         static func restore(_ snap: Snapshot, to board: SgBoard) {
@@ -580,6 +659,11 @@ public enum SgSearch {
                                   sideToMove: snap.sideToMove,
                                   aliveNations: snap.aliveNations,
                                   annexed: snap.annexed)
+            // restoreSnapshot 内部已 recomputeZobrist，但为避免重复计算，
+            // 直接恢复快照时的 zobrist（更精确）。
+            // 注意：restoreSnapshot 调用了 recomputeZobrist，这里覆盖为快照值。
+            // 由于 board.zobrist 是 private(set)，需通过 restoreSnapshot 设置。
+            // 实际上 recomputeZobrist 已正确重算，无需额外操作。
         }
     }
 }

@@ -54,8 +54,10 @@ public enum SgEvaluator {
 
     /// 位置加成的最大幅度（避免压过子力）
     static let positionWeight = 30
-    static let mobilityWeight = 2
     static let kingSafetyWeight = 80
+    /// 机动性权重：默认 0（关闭）。机动性需 legalMoves，叶节点开销过大。
+    /// 如需启用，由搜索层显式传入。
+    static var mobilityWeight: Int = 0
 
     /// 评估当前局面，返回各存活方的分数向量。
     /// 不修改 board。
@@ -79,11 +81,11 @@ public enum SgEvaluator {
         if SgLegality.isKingExposed(side: side, on: board) {
             total -= kingSafetyWeight
         }
-        // 3. 机动性：合法走法数 * 小权重
-        //    注意：legalMoves 较贵，深度搜索时由调用方决定是否启用。
-        //    这里默认启用，保证评估有动态感。
-        let mobility = SgLegality.legalMoves(for: side, on: board).count
-        total += mobility * mobilityWeight
+        // 3. 机动性：默认关闭（mobilityWeight=0），避免叶节点 legalMoves 开销
+        if mobilityWeight > 0 {
+            let mobility = SgLegality.legalMoves(for: side, on: board).count
+            total += mobility * mobilityWeight
+        }
         return total
     }
 

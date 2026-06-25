@@ -30,6 +30,19 @@ public enum SgMoveGen {
         return moves
     }
 
+    /// 生成某方所有伪合法**吃子**走法（仅吃子，用于 quiescence 搜索）。
+    /// 仍需上层过滤主帅互照。
+    public static func pseudoCaptures(for side: SgNation, on board: SgBoard) -> [SgMove] {
+        var moves: [SgMove] = []
+        for (pos, piece) in board.pieces where piece.nation == side {
+            let all = movesFor(piece: piece, at: pos, on: board)
+            for m in all where board.piece(at: m.to) != nil {
+                moves.append(m)
+            }
+        }
+        return moves
+    }
+
     /// 单枚棋子的所有伪合法走法。
     public static func movesFor(piece: SgPiece, at pos: SgPos, on board: SgBoard) -> [SgMove] {
         switch piece.type {

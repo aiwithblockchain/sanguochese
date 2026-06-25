@@ -26,6 +26,18 @@ public enum SgLegality {
         }
     }
 
+    /// 生成某方的所有合法**吃子**走法（用于 quiescence 搜索）。
+    /// 已过滤主帅互照。
+    public static func legalCaptures(for side: SgNation, on board: SgBoard) -> [SgMove] {
+        let pseudo = SgMoveGen.pseudoCaptures(for: side, on: board)
+        return pseudo.filter { move in
+            let captured = board.apply(move)
+            let ok = !isKingExposed(side: side, on: board)
+            board.undo(move, captured: captured)
+            return ok
+        }
+    }
+
     /// 判断 side 的主帅是否与任一敌方主帅无遮挡相对（照面）。
     /// 若 side 已无主帅（已灭国），返回 false。
     public static func isKingExposed(side: SgNation, on board: SgBoard) -> Bool {
