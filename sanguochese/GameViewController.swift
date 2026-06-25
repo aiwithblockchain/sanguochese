@@ -24,6 +24,8 @@ class GameViewController: UIViewController {
     var commentaryApiKey: String = ""
     /// 解说视角阵营
     var commentarySide: SgNation = .shu
+    /// 棋盘视角阵营（该方地盘朝屏幕下方展开）；nil = 默认魏方在上
+    var perspectiveSide: SgNation? = nil
 
     /// 当前已呈现的 scene（避免重复 present）
     private var scenePresented = false
@@ -55,6 +57,7 @@ class GameViewController: UIViewController {
         scene.humanSides = humanSides
         scene.aiDifficulty = aiDifficulty
         scene.commentarySide = commentarySide
+        scene.perspectiveSide = perspectiveSide
         if commentaryEnabled {
             scene.commentaryBridge = SgDeepSeekBridge(apiKey: commentaryApiKey)
         }

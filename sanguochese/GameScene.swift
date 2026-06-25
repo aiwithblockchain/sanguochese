@@ -40,6 +40,10 @@ class GameScene: SKScene {
     /// 玩家阵营（用于选择解说者）；人人对战时取魏方视角
     var commentarySide: SgNation = .shu
 
+    /// 棋盘视角阵营：该方地盘朝向屏幕下方展开。
+    /// nil = 默认（魏方在上）。由 GameViewController 注入。
+    var perspectiveSide: SgNation? = nil
+
     // MARK: - 交互状态
 
     private var selectedPos: SgPos?
@@ -48,6 +52,7 @@ class GameScene: SKScene {
     // MARK: - UI 节点
 
     private var statusLabel: SKLabelNode!
+    private var statusBg: SKShapeNode!
     private var commentaryLabel: SKLabelNode?
     private var boardRoot: SKNode { renderer.boardRoot }
 
@@ -61,18 +66,30 @@ class GameScene: SKScene {
         let side = min(self.size.width, self.size.height)
         // 棋盘直径 ≈ 2·boardRadius，留 15% 边距 + 顶部状态栏空间
         let cellSize = side / (2.0 * (9.0 * CGFloat(3).squareRoot() / 6.0 + 4.0) * 1.15)
-        renderer = SgBoardRenderer(cellSize: cellSize)
+        renderer = SgBoardRenderer(cellSize: cellSize, perspectiveNation: perspectiveSide)
 
         // 把棋盘根节点放到场景中心
         renderer.boardRoot.position = CGPoint(x: self.size.width / 2, y: self.size.height / 2)
         addChild(renderer.boardRoot)
 
-        // 状态栏
+        // 状态栏（避开灵动岛 / 刘海）
+        let safeTop = view.safeAreaInsets.top
+        let topOffset = max(safeTop + 12, 44)
+        let statusY = self.size.height - topOffset
+
+        statusBg = SKShapeNode(rectOf: CGSize(width: 160, height: 36), cornerRadius: 12)
+        statusBg.fillColor = SKColor(white: 1.0, alpha: 0.85)
+        statusBg.strokeColor = SKColor(white: 0.7, alpha: 0.5)
+        statusBg.lineWidth = 1.0
+        statusBg.position = CGPoint(x: self.size.width / 2, y: statusY)
+        statusBg.zPosition = -1
+        addChild(statusBg)
+
         statusLabel = SKLabelNode(text: "")
         statusLabel.fontName = "PingFangSC-Semibold"
-        statusLabel.fontSize = 22
+        statusLabel.fontSize = 20
         statusLabel.fontColor = SKColor(white: 0.2, alpha: 1.0)
-        statusLabel.position = CGPoint(x: self.size.width / 2, y: self.size.height - 40)
+        statusLabel.position = CGPoint(x: self.size.width / 2, y: statusY)
         statusLabel.verticalAlignmentMode = .center
         addChild(statusLabel)
 
@@ -91,6 +108,7 @@ class GameScene: SKScene {
         }
 
         renderer.refreshPieces(from: board)
+        renderer.refreshForkedLines(for: board.sideToMove)
         updateStatus()
         // 首回合若 AI 先走（玩家未选魏方），触发 AI
         triggerAIIfNeeded()
@@ -103,7 +121,10 @@ class GameScene: SKScene {
         let isHuman = humanSides.contains(side)
         let prefix = isHuman ? "" : "[AI] "
         statusLabel.text = "\(prefix)\(side.displayName)方走子"
-        statusLabel.fontColor = renderer.color(for: side)
+        let c = renderer.color(for: side)
+        statusLabel.fontColor = c
+        statusBg.strokeColor = c.withAlphaComponent(0.8)
+        renderer.refreshForkedLines(for: side)
     }
 
     // MARK: - 点击交互 (P3-1 / P3-2 / P3-5)

@@ -179,6 +179,8 @@ class SgSetupViewController: UIViewController {
         gameVC.commentaryEnabled = commentaryEnabled
         gameVC.commentaryApiKey = apiKey
         gameVC.commentarySide = selectedHumanSide
+        // 视角：人机模式以玩家本国为下方；人人对战默认魏方在上（nil）
+        gameVC.perspectiveSide = isHumanVsHuman ? nil : selectedHumanSide
         gameVC.modalPresentationStyle = .fullScreen
         present(gameVC, animated: true)
     }

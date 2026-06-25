@@ -110,9 +110,13 @@ public final class SgBoard {
     public func annex(defeated: SgNation, by victor: SgNation) {
         aliveNations.remove(defeated)
         annexed[defeated] = victor
-        // 改色：败方所有棋子归胜方
+        // 改色：败方所有棋子归胜方。
+        // 注意 SgPiece 是 struct（值类型），`pieces[pos]?.nation = victor` 只会修改
+        // 字典返回的副本，不会写回字典。必须整枚重新赋值才能生效。
         for pos in positions(of: defeated) {
-            pieces[pos]?.nation = victor
+            if let p = pieces[pos] {
+                pieces[pos] = SgPiece(type: p.type, nation: victor)
+            }
         }
     }
 

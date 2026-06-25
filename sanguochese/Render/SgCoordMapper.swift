@@ -33,20 +33,34 @@ public struct SgCoordMapper {
     /// 三条国界边各长 9·cellSize，拼成等边三角形，内切半径 = 边长·√3/6。
     public let apothem: CGFloat
 
-    public init(cellSize: CGFloat) {
+    /// 视角旋转偏移（弧度），让 perspectiveNation 的 outward 指向屏幕下方。
+    public let rotationOffset: CGFloat
+
+    public init(cellSize: CGFloat, perspectiveNation: SgNation? = nil) {
         self.cellSize = cellSize
         self.apothem = cellSize * 9.0 * CGFloat(3.0).squareRoot() / 6.0
+        if let nation = perspectiveNation {
+            // 让该国的 outward 方向指向屏幕下方 (-π/2)
+            self.rotationOffset = -CGFloat.pi / 2 - Self.baseOutwardAngle(of: nation)
+        } else {
+            self.rotationOffset = 0
+        }
     }
 
     // MARK: - 每方朝外角
 
-    /// 某方的朝外角 θ（弧度，从棋盘中心指向该方底线方向）。
-    public func outwardAngle(of nation: SgNation) -> CGFloat {
+    /// 基础朝外角（未应用视角旋转）。
+    public static func baseOutwardAngle(of nation: SgNation) -> CGFloat {
         switch nation {
         case .wei: return .pi / 2
         case .shu: return -.pi / 6
         case .wu:  return 7.0 * .pi / 6.0
         }
+    }
+
+    /// 某方在当前视角下的朝外角。
+    public func outwardAngle(of nation: SgNation) -> CGFloat {
+        return Self.baseOutwardAngle(of: nation) + rotationOffset
     }
 
     /// outward 单位向量

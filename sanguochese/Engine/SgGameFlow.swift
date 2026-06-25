@@ -48,8 +48,10 @@ public enum SgGameFlow {
         // P4-1 / P4-2：吃到主帅 → 触发吞并
         if let cap = captured, cap.type == .king {
             let defeated = cap.nation
+            log("🎯 吃帅灭国: \(mover.displayName) 吃掉 \(defeated.displayName) 主帅，触发吞并")
             board.annex(defeated: defeated, by: mover)
             if board.aliveNations.count == 1 {
+                log("🏆 终局: \(mover.displayName) 一统天下")
                 return .gameOver(winner: mover)
             }
             advanceTurn(on: board)
@@ -95,7 +97,7 @@ public enum SgGameFlow {
         // P4-5 三国阶段消极判负：无过河棋且他方已有过河棋
         if board.aliveNations.count == 3,
            !hasCrossedPieces(side, on: board),
-           someOtherAliveSideHasCrossed(side, on: board) {
+           allOtherAliveSidesHaveCrossed(side, on: board) {
             board.clearAll(of: side)
             if board.aliveNations.count == 1, let w = board.aliveNations.first {
                 return .gameOver(winner: w)
@@ -131,12 +133,12 @@ public enum SgGameFlow {
         return false
     }
 
-    /// 除 side 外是否至少有一方有过河棋
-    private static func someOtherAliveSideHasCrossed(_ side: SgNation, on board: SgBoard) -> Bool {
+    /// 除 side 外，所有其他存活方是否都至少有一个过河棋。
+    private static func allOtherAliveSidesHaveCrossed(_ side: SgNation, on board: SgBoard) -> Bool {
         for other in board.aliveNations where other != side {
-            if hasCrossedPieces(other, on: board) { return true }
+            if !hasCrossedPieces(other, on: board) { return false }
         }
-        return false
+        return true
     }
 
     // MARK: - 事件合并
@@ -148,5 +150,13 @@ public enum SgGameFlow {
         // 若后续有新的灭国事件且主事件只是 ongoing，返回后续
         if case .ongoing = primary { return follow }
         return primary
+    }
+
+    // MARK: - 调试日志
+
+    private static func log(_ message: String) {
+        #if DEBUG
+        print("[SgGameFlow] \(message)")
+        #endif
     }
 }

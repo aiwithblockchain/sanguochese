@@ -25,6 +25,7 @@ public final class SgBoardRenderer {
     public let boardRoot = SKNode()
 
     private let gridLayer = SKNode()
+    private let forkedLayer = SKNode()      // 动态虚线出国线（仅当前应走方）
     private let highlightLayer = SKNode()
     private let pieceLayer = SKNode()
     private let selectionLayer = SKNode()
@@ -36,9 +37,10 @@ public final class SgBoardRenderer {
         .wu:  SKColor(red: 0.20, green: 0.70, blue: 0.40, alpha: 1.0),
     ]
 
-    public init(cellSize: CGFloat) {
-        self.mapper = SgCoordMapper(cellSize: cellSize)
+    public init(cellSize: CGFloat, perspectiveNation: SgNation? = nil) {
+        self.mapper = SgCoordMapper(cellSize: cellSize, perspectiveNation: perspectiveNation)
         boardRoot.addChild(gridLayer)
+        boardRoot.addChild(forkedLayer)
         boardRoot.addChild(highlightLayer)
         boardRoot.addChild(pieceLayer)
         boardRoot.addChild(selectionLayer)
@@ -165,6 +167,61 @@ public final class SgBoardRenderer {
     private func outward(_ nation: SgNation) -> CGVector {
         let a = mapper.outwardAngle(of: nation)
         return CGVector(dx: cos(a), dy: sin(a))
+    }
+
+    /// 动态更新出国虚线：只绘制当前应走方一侧的 9 条分叉线，
+    /// 避免三方交叉的混乱感。
+    public func refreshForkedLines(for side: SgNation) {
+        forkedLayer.removeAllChildren()
+
+        let dashColor = color(for: side).withAlphaComponent(0.35)
+        let dashWidth: CGFloat = 0.8
+        let dashLength: CGFloat = 5.0
+        let gapLength: CGFloat = 4.0
+
+        for file in 1...9 {
+            let start = mapper.screenPos(for: SgPos(nation: side, file: file, rank: 5))
+            for enemy in side.opponents() {
+                let end = mapper.screenPos(for: SgPos(nation: enemy, file: 10 - file, rank: 5))
+                drawDashedLine(from: start, to: end,
+                               color: dashColor, width: dashWidth,
+                               dash: dashLength, gap: gapLength,
+                               to: forkedLayer)
+            }
+        }
+    }
+
+    private func drawDashedLine(from: CGPoint, to: CGPoint,
+                                color: SKColor, width: CGFloat,
+                                dash: CGFloat, gap: CGFloat,
+                                to layer: SKNode) {
+        let dx = to.x - from.x
+        let dy = to.y - from.y
+        let dist = (dx * dx + dy * dy).squareRoot()
+        guard dist > 0 else { return }
+        let ux = dx / dist
+        let uy = dy / dist
+
+        var pos: CGFloat = 0
+        var drawing = true
+        while pos < dist {
+            let seg = drawing ? min(dash, dist - pos) : min(gap, dist - pos)
+            if drawing {
+                let a = CGPoint(x: from.x + ux * pos, y: from.y + uy * pos)
+                let b = CGPoint(x: from.x + ux * (pos + seg), y: from.y + uy * (pos + seg))
+                let path = CGMutablePath()
+                path.move(to: a)
+                path.addLine(to: b)
+                let node = SKShapeNode(path: path)
+                node.strokeColor = color
+                node.lineWidth = width
+                node.isAntialiased = true
+                node.zPosition = -0.5
+                layer.addChild(node)
+            }
+            pos += seg
+            drawing.toggle()
+        }
     }
 
     // MARK: - P2-3 棋子
