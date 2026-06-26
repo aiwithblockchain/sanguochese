@@ -40,9 +40,15 @@ public final class SgBoardRenderer {
     /// 需要绘制地盘的国家集合（2 人模式只画两方，第三方瓣留空）。
     private let aliveNations: Set<SgNation>
 
-    public init(cellSize: CGFloat, perspectiveNation: SgNation? = nil, aliveNations: Set<SgNation> = Set(SgNation.allCases)) {
-        self.mapper = SgCoordMapper(cellSize: cellSize, perspectiveNation: perspectiveNation)
+    /// 棋盘布局（Y 形 / 矩形）
+    private let layout: SgBoardLayout
+
+    public init(cellSize: CGFloat, perspectiveNation: SgNation? = nil,
+                aliveNations: Set<SgNation> = Set(SgNation.allCases),
+                layout: SgBoardLayout = .yShape) {
+        self.mapper = SgCoordMapper(cellSize: cellSize, perspectiveNation: perspectiveNation, layout: layout)
         self.aliveNations = aliveNations
+        self.layout = layout
         boardRoot.addChild(gridLayer)
         boardRoot.addChild(forkedLayer)
         boardRoot.addChild(highlightLayer)
@@ -66,12 +72,17 @@ public final class SgBoardRenderer {
 
     // MARK: - P2-1 / P2-2 地盘与国界
 
-    /// 绘制三瓣地盘网格、九宫斜线、国界边。只画一次。
+    /// 绘制棋盘网格。只画一次。
     private func drawGrid() {
-        for nation in SgNation.allCases where aliveNations.contains(nation) {
-            drawTerritory(for: nation)
+        switch layout {
+        case .yShape:
+            for nation in SgNation.allCases where aliveNations.contains(nation) {
+                drawTerritory(for: nation)
+            }
+            drawCentralTriangle()
+        case .rectangular(let bottom, let top):
+            drawRectGrid(bottom: bottom, top: top)
         }
-        drawCentralTriangle()
     }
 
     /// 绘制单方地盘：9×5 网格线 + 九宫斜线 + 国界边加粗。
@@ -168,6 +179,126 @@ public final class SgBoardRenderer {
         _ = pts
     }
 
+    // MARK: - 矩形棋盘（2 人模式）
+
+    /// 绘制 9×10 矩形棋盘：纵线、横线、九宫斜线、河界文字、国名标签。
+    private func drawRectGrid(bottom: SgNation, top: SgNation) {
+        let lineColor = SKColor(white: 0.35, alpha: 0.9)
+        let lineWidth: CGFloat = 1.0
+        let borderLineWidth: CGFloat = 2.5
+        let cs = mapper.cellSize
+
+        // 纵线：9 条 column 0..8，从 row 0 到 row 9 连续（标准象棋纵线过河）
+        for column in 0...8 {
+            let bottomPos = screenPosRect(column: column, row: 0, bottom: bottom, top: top)
+            let topPos = screenPosRect(column: column, row: 9, bottom: bottom, top: top)
+            let path = CGMutablePath()
+            path.move(to: bottomPos)
+            path.addLine(to: topPos)
+            let node = SKShapeNode(path: path)
+            node.lineWidth = lineWidth
+            node.strokeColor = lineColor
+            node.isAntialiased = true
+            gridLayer.addChild(node)
+        }
+
+        // 横线：底方 row 0..4 + 顶方 row 5..9（跳过河界 row 4↔5）
+        for row in 0...9 {
+            // 河界处不画横线（row 4 与 row 5 之间是河，不画这两条之间的连线）
+            // 但 row 4 和 row 9 各画一条横线
+            let leftPos = screenPosRect(column: 0, row: row, bottom: bottom, top: top)
+            let rightPos = screenPosRect(column: 8, row: row, bottom: bottom, top: top)
+            let path = CGMutablePath()
+            path.move(to: leftPos)
+            path.addLine(to: rightPos)
+            let isBorder = (row == 0 || row == 9)
+            let node = SKShapeNode(path: path)
+            node.lineWidth = isBorder ? borderLineWidth : lineWidth
+            // 底方用 bottom 色，顶方用 top 色，河界两侧用中性色
+            let borderColor: SKColor
+            if row <= 4 {
+                borderColor = darkColor(for: bottom)
+            } else {
+                borderColor = darkColor(for: top)
+            }
+            node.strokeColor = isBorder ? borderColor : lineColor
+            node.isAntialiased = true
+            gridLayer.addChild(node)
+        }
+
+        // 九宫斜线：底方 column 3..5 × row 0..2；顶方 column 3..5 × row 7..9
+        drawRectPalace(originColumn: 3, originRow: 0, bottom: bottom, top: top, color: lineColor, width: lineWidth)
+        drawRectPalace(originColumn: 3, originRow: 7, bottom: bottom, top: top, color: lineColor, width: lineWidth)
+
+        // 河界文字："楚河　汉界"
+        let riverY = (screenPosRect(column: 0, row: 4, bottom: bottom, top: top).y
+                     + screenPosRect(column: 0, row: 5, bottom: bottom, top: top).y) / 2.0
+        let leftLabel = SKLabelNode(text: "楚 河")
+        leftLabel.fontName = "PingFangSC-Semibold"
+        leftLabel.fontSize = cs * 0.7
+        leftLabel.fontColor = SKColor(white: 0.4, alpha: 0.8)
+        leftLabel.position = CGPoint(x: -2.0 * cs, y: riverY)
+        leftLabel.verticalAlignmentMode = .center
+        leftLabel.zPosition = -0.5
+        gridLayer.addChild(leftLabel)
+        let rightLabel = SKLabelNode(text: "汉 界")
+        rightLabel.fontName = "PingFangSC-Semibold"
+        rightLabel.fontSize = cs * 0.7
+        rightLabel.fontColor = SKColor(white: 0.4, alpha: 0.8)
+        rightLabel.position = CGPoint(x: 2.0 * cs, y: riverY)
+        rightLabel.verticalAlignmentMode = .center
+        rightLabel.zPosition = -0.5
+        gridLayer.addChild(rightLabel)
+
+        // 国名标签：底方在 row 0 下方；顶方在 row 9 上方
+        let bottomLabelPos = screenPosRect(column: 4, row: 0, bottom: bottom, top: top)
+        let bottomLabel = SKLabelNode(text: bottom.displayName)
+        bottomLabel.fontName = "PingFangSC-Semibold"
+        bottomLabel.fontSize = 24
+        bottomLabel.fontColor = color(for: bottom)
+        bottomLabel.position = CGPoint(x: bottomLabelPos.x, y: bottomLabelPos.y - cs * 0.9)
+        bottomLabel.verticalAlignmentMode = .center
+        gridLayer.addChild(bottomLabel)
+
+        let topLabelPos = screenPosRect(column: 4, row: 9, bottom: bottom, top: top)
+        let topLabel = SKLabelNode(text: top.displayName)
+        topLabel.fontName = "PingFangSC-Semibold"
+        topLabel.fontSize = 24
+        topLabel.fontColor = color(for: top)
+        topLabel.position = CGPoint(x: topLabelPos.x, y: topLabelPos.y + cs * 0.9)
+        topLabel.verticalAlignmentMode = .center
+        gridLayer.addChild(topLabel)
+    }
+
+    /// 绘制矩形九宫斜线（2×2 范围，column origin..origin+2, row origin..origin+2）
+    private func drawRectPalace(originColumn: Int, originRow: Int,
+                                bottom: SgNation, top: SgNation,
+                                color: SKColor, width: CGFloat) {
+        // 九宫四角：左下、右下、右上、左上
+        let lb = screenPosRect(column: originColumn, row: originRow, bottom: bottom, top: top)
+        let rb = screenPosRect(column: originColumn + 2, row: originRow, bottom: bottom, top: top)
+        let rt = screenPosRect(column: originColumn + 2, row: originRow + 2, bottom: bottom, top: top)
+        let lt = screenPosRect(column: originColumn, row: originRow + 2, bottom: bottom, top: top)
+        for (a, b) in [(lb, rt), (rb, lt)] {
+            let path = CGMutablePath()
+            path.move(to: a)
+            path.addLine(to: b)
+            let node = SKShapeNode(path: path)
+            node.lineWidth = width
+            node.strokeColor = color
+            node.isAntialiased = true
+            gridLayer.addChild(node)
+        }
+    }
+
+    /// 矩形布局下 (column, row) → 屏幕坐标（与 SgCoordMapper.screenPos 矩形分支一致）
+    private func screenPosRect(column: Int, row: Int, bottom: SgNation, top: SgNation) -> CGPoint {
+        let cs = mapper.cellSize
+        let x = CGFloat(column - 4) * cs
+        let y = CGFloat(row - 4) * cs - 0.5 * cs
+        return CGPoint(x: x, y: y)
+    }
+
     private func outward(_ nation: SgNation) -> CGVector {
         let a = mapper.outwardAngle(of: nation)
         return CGVector(dx: cos(a), dy: sin(a))
@@ -177,6 +308,8 @@ public final class SgBoardRenderer {
     /// 避免三方交叉的混乱感。
     public func refreshForkedLines(for side: SgNation) {
         forkedLayer.removeAllChildren()
+        // 矩形布局无国界分叉，不画虚线
+        if case .rectangular = layout { return }
 
         let dashColor = color(for: side).withAlphaComponent(0.35)
         let dashWidth: CGFloat = 0.8

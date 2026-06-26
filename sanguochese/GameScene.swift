@@ -75,11 +75,23 @@ class GameScene: SKScene {
 
         // 根据场景尺寸自适应格子大小
         let side = min(self.size.width, self.size.height)
-        // 棋盘直径 ≈ 2·boardRadius，留 15% 边距 + 顶部状态栏空间
-        let cellSize = side / (2.0 * (9.0 * CGFloat(3).squareRoot() / 6.0 + 4.0) * 1.15)
+        let cellSize: CGFloat
+        let layout: SgBoardLayout
+        switch gameMode {
+        case .threeNation:
+            // 棋盘直径 ≈ 2·boardRadius，留 15% 边距 + 顶部状态栏空间
+            cellSize = side / (2.0 * (9.0 * CGFloat(3).squareRoot() / 6.0 + 4.0) * 1.15)
+            layout = .yShape
+        case .twoNation(let human, let ai):
+            // 矩形 9×10：宽 9 格 + 边距，高 10 格 + 顶部状态栏 + 边距
+            cellSize = min(self.size.width / 9.5, self.size.height / 11.0)
+            let bottom = perspectiveSide ?? human
+            layout = .rectangular(bottom: bottom, top: ai)
+        }
         renderer = SgBoardRenderer(cellSize: cellSize,
                                    perspectiveNation: perspectiveSide,
-                                   aliveNations: board.aliveNations)
+                                   aliveNations: board.aliveNations,
+                                   layout: layout)
 
         // 把棋盘根节点放到场景中心
         renderer.boardRoot.position = CGPoint(x: self.size.width / 2, y: self.size.height / 2)

@@ -11,7 +11,7 @@
 import Foundation
 
 /// 对局模式。
-public enum SgGameMode {
+public enum SgGameMode: Equatable {
     /// 三国对局（魏 / 蜀 / 吴 三方）
     case threeNation
     /// 两方对局（1v1，模拟标准象棋）。human 与 ai 为参与的两方，
@@ -23,4 +23,14 @@ public enum SgGameMode {
         if case .twoNation = self { return true }
         return false
     }
+}
+
+/// 棋盘渲染布局。
+public enum SgBoardLayout {
+    /// 3 人 Y 形（三方 120° 旋转对称）
+    case yShape
+    /// 2 人矩形（标准中国象棋 9×10 棋盘）
+    /// - bottom: 屏幕下方的一方（通常为人类方）
+    /// - top: 屏幕上方的一方
+    case rectangular(bottom: SgNation, top: SgNation)
 }

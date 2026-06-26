@@ -155,6 +155,10 @@ public enum SgSearch {
     public static func chooseMove(for side: SgNation,
                                   on board: SgBoard,
                                   difficulty: SgDifficulty = .normal) -> SgSearchResult {
+        // 搜索期间静默 GameFlow 日志，避免每个模拟节点都打印
+        SgGameFlow.silenceLogging()
+        defer { SgGameFlow.restoreLogging() }
+
         let moves = SgLegality.legalMoves(for: side, on: board)
         if moves.isEmpty {
             return SgSearchResult(move: nil, score: 0, principalVariation: [])

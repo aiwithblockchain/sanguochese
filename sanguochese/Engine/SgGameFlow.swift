@@ -38,6 +38,14 @@ public enum SgMoveOutcome: Equatable {
 
 public enum SgGameFlow {
 
+    /// 日志开关：搜索/模拟时静默，避免每个搜索节点都打印。
+    private static var loggingEnabled = true
+
+    /// 静默日志（搜索开始前调用）
+    public static func silenceLogging() { loggingEnabled = false }
+    /// 恢复日志（搜索结束后调用）
+    public static func restoreLogging() { loggingEnabled = true }
+
     /// 执行一步走法并完成全部结算（含回合轮转）。
     /// 调用后 board.sideToMove 已指向下一个应走方。
     @discardableResult
@@ -71,18 +79,10 @@ public enum SgGameFlow {
     }
 
     /// 当前整体游戏结果
+    /// O(1)：仅检查 aliveNations 数量。吃帅/灭国时 play() 已通过 markDefeated/annex
+    /// 更新 aliveNations，无需在此遍历棋盘找主帅。
     public static func result(of board: SgBoard) -> SgGameResult {
-        // 两方模式：任一方主帅不在 → 对方胜
-        if board.mode.isTwoNation {
-            for nation in board.aliveNations {
-                if board.kingPos(of: nation) == nil {
-                    let winner = board.aliveNations.first(where: { $0 != nation }) ?? nation
-                    return .gameOver(winner: winner)
-                }
-            }
-            return .ongoing
-        }
-        if board.aliveNations.count == 1, let w = board.aliveNations.first {
+        if board.aliveNations.count <= 1, let w = board.aliveNations.first {
             return .gameOver(winner: w)
         }
         return .ongoing
@@ -178,6 +178,7 @@ public enum SgGameFlow {
     // MARK: - 调试日志
 
     private static func log(_ message: String) {
+        guard loggingEnabled else { return }
         #if DEBUG
         print("[SgGameFlow] \(message)")
         #endif

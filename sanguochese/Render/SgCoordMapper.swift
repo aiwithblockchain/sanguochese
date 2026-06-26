@@ -36,8 +36,13 @@ public struct SgCoordMapper {
     /// 视角旋转偏移（弧度），让 perspectiveNation 的 outward 指向屏幕下方。
     public let rotationOffset: CGFloat
 
-    public init(cellSize: CGFloat, perspectiveNation: SgNation? = nil) {
+    /// 棋盘布局（Y 形 / 矩形）
+    public let layout: SgBoardLayout
+
+    public init(cellSize: CGFloat, perspectiveNation: SgNation? = nil,
+                layout: SgBoardLayout = .yShape) {
         self.cellSize = cellSize
+        self.layout = layout
         self.apothem = cellSize * 9.0 * CGFloat(3.0).squareRoot() / 6.0
         if let nation = perspectiveNation {
             // 让该国的 outward 方向指向屏幕下方 (-π/2)
@@ -79,43 +84,89 @@ public struct SgCoordMapper {
 
     /// 某格中心在屏幕坐标系（以棋盘中心为原点）中的位置。
     public func screenPos(for pos: SgPos) -> CGPoint {
-        let out = outwardVec(pos.nation)
-        let tan = tangentVec(pos.nation)
-        // rank=5 在国界边（距中心 apothem），rank=1 在最外（距中心 apothem + 4·cellSize）
-        let radial = apothem + CGFloat(5 - pos.rank) * cellSize
-        let lateral = CGFloat(pos.file - 5) * cellSize
-        let x = radial * out.dx + lateral * tan.dx
-        let y = radial * out.dy + lateral * tan.dy
-        return CGPoint(x: x, y: y)
+        switch layout {
+        case .yShape:
+            let out = outwardVec(pos.nation)
+            let tan = tangentVec(pos.nation)
+            // rank=5 在国界边（距中心 apothem），rank=1 在最外（距中心 apothem + 4·cellSize）
+            let radial = apothem + CGFloat(5 - pos.rank) * cellSize
+            let lateral = CGFloat(pos.file - 5) * cellSize
+            let x = radial * out.dx + lateral * tan.dx
+            let y = radial * out.dy + lateral * tan.dy
+            return CGPoint(x: x, y: y)
+        case .rectangular(let bottom, let top):
+            // 把 (nation, file, rank) 映射到 9×10 矩形的 (column 0..8, row 0..9)
+            // row 0 = 底方底线，row 9 = 顶方底线
+            let column: Int
+            let row: Int
+            if pos.nation == bottom {
+                column = pos.file - 1
+                row = pos.rank - 1
+            } else if pos.nation == top {
+                column = 9 - pos.file
+                row = 10 - pos.rank
+            } else {
+                // 不应发生：矩形布局只有两方
+                return .zero
+            }
+            let x = CGFloat(column - 4) * cellSize
+            // row 0 = 底方底线（屏幕下方，低 y）；row 9 = 顶方底线（屏幕上方，高 y）
+            let y = CGFloat(row - 4) * cellSize - 0.5 * cellSize
+            return CGPoint(x: x, y: y)
+        }
     }
 
     /// 棋盘整体半径（从中心到最外底线的角点），用于布局缩放。
     public var boardRadius: CGFloat {
-        // 底线角点：radial = apothem + 4·cellSize，lateral = ±4·cellSize
-        let r = apothem + 4 * cellSize
-        let l = 4 * cellSize
-        return (r * r + l * l).squareRoot()
+        switch layout {
+        case .yShape:
+            // 底线角点：radial = apothem + 4·cellSize，lateral = ±4·cellSize
+            let r = apothem + 4 * cellSize
+            let l = 4 * cellSize
+            return (r * r + l * l).squareRoot()
+        case .rectangular:
+            // 矩形对角半径：半宽 4.5·cs + 半高 5·cs
+            let halfW = 4.5 * cellSize
+            let halfH = 5.0 * cellSize
+            return (halfW * halfW + halfH * halfH).squareRoot()
+        }
     }
 
     // MARK: - 格子多边形（用于绘制/点击命中）
 
     /// 返回某格的四角屏幕坐标（顺时针），用于绘制格子矩形与命中判定。
     public func cellPolygon(for pos: SgPos) -> [CGPoint] {
-        let out = outwardVec(pos.nation)
-        let tan = tangentVec(pos.nation)
-        // 在局部 (radial, lateral) 平面上，格子四角为：
-        //   radial 范围：[apothem + (5-rank)·cs - 0.5cs,  + 0.5cs]
-        //   lateral 范围：[(file-5)·cs - 0.5cs, + 0.5cs]
-        let cs = cellSize
-        let r0 = apothem + CGFloat(5 - pos.rank) * cs - 0.5 * cs
-        let r1 = r0 + cs
-        let l0 = CGFloat(pos.file - 5) * cs - 0.5 * cs
-        let l1 = l0 + cs
-        // 四角：(r0,l0)(r0,l1)(r1,l1)(r1,l0)
-        func p(_ r: CGFloat, _ l: CGFloat) -> CGPoint {
-            CGPoint(x: r * out.dx + l * tan.dx, y: r * out.dy + l * tan.dy)
+        switch layout {
+        case .yShape:
+            let out = outwardVec(pos.nation)
+            let tan = tangentVec(pos.nation)
+            // 在局部 (radial, lateral) 平面上，格子四角为：
+            //   radial 范围：[apothem + (5-rank)·cs - 0.5cs,  + 0.5cs]
+            //   lateral 范围：[(file-5)·cs - 0.5cs, + 0.5cs]
+            let cs = cellSize
+            let r0 = apothem + CGFloat(5 - pos.rank) * cs - 0.5 * cs
+            let r1 = r0 + cs
+            let l0 = CGFloat(pos.file - 5) * cs - 0.5 * cs
+            let l1 = l0 + cs
+            // 四角：(r0,l0)(r0,l1)(r1,l1)(r1,l0)
+            func p(_ r: CGFloat, _ l: CGFloat) -> CGPoint {
+                CGPoint(x: r * out.dx + l * tan.dx, y: r * out.dy + l * tan.dy)
+            }
+            return [p(r0, l0), p(r0, l1), p(r1, l1), p(r1, l0)]
+        case .rectangular:
+            let center = screenPos(for: pos)
+            let cs = cellSize
+            let half = cs / 2.0
+            // 矩形格子四角
+            let dx: CGFloat = half
+            let dy: CGFloat = half
+            return [
+                CGPoint(x: center.x - dx, y: center.y - dy),
+                CGPoint(x: center.x + dx, y: center.y - dy),
+                CGPoint(x: center.x + dx, y: center.y + dy),
+                CGPoint(x: center.x - dx, y: center.y + dy),
+            ]
         }
-        return [p(r0, l0), p(r0, l1), p(r1, l1), p(r1, l0)]
     }
 
     /// 某格中心的多边形（用于点击命中），等价于 cellPolygon 但便于 SKShapeNode 绘制。
@@ -132,32 +183,64 @@ public struct SgCoordMapper {
 
     /// 给定屏幕坐标（以棋盘中心为原点），返回命中的格子，未命中返回 nil。
     public func pos(at point: CGPoint) -> SgPos? {
-        // 对每方，把 point 投影到该方局部 (radial, lateral) 坐标，判断是否落在 9×5 内。
-        for nation in SgNation.allCases {
-            let out = outwardVec(nation)
-            let tan = tangentVec(nation)
-            let radial = point.x * out.dx + point.y * out.dy
-            let lateral = point.x * tan.dx + point.y * tan.dy
-            // radial 范围：apothem + (5-rank)·cs ± 0.5cs，rank=1..5
-            //   rank=5: radial∈[apothem-0.5cs, apothem+0.5cs]
-            //   rank=1: radial∈[apothem+3.5cs, apothem+4.5cs]
+        switch layout {
+        case .yShape:
+            // 对每方，把 point 投影到该方局部 (radial, lateral) 坐标，判断是否落在 9×5 内。
+            for nation in SgNation.allCases {
+                let out = outwardVec(nation)
+                let tan = tangentVec(nation)
+                let radial = point.x * out.dx + point.y * out.dy
+                let lateral = point.x * tan.dx + point.y * tan.dy
+                // radial 范围：apothem + (5-rank)·cs ± 0.5cs，rank=1..5
+                //   rank=5: radial∈[apothem-0.5cs, apothem+0.5cs]
+                //   rank=1: radial∈[apothem+3.5cs, apothem+4.5cs]
+                let cs = cellSize
+                let radialFromBorder = radial - apothem  // rank=5 → ~0, rank=1 → ~4cs
+                // rank = 5 - round((radialFromBorder)/cs)，且需在 [1,5]
+                let rankFloat = 5.0 - radialFromBorder / cs
+                let fileFloat = 5.0 + lateral / cs
+                // 命中判定：落在格子中心 ±0.5cs 内
+                let rank = Int((rankFloat + 0.5).rounded(.down))
+                let file = Int((fileFloat + 0.5).rounded(.down))
+                if (1...5).contains(rank) && (1...9).contains(file) {
+                    // 再校验确实在该格矩形内（避免边缘溢出误判）
+                    let pos = SgPos(nation: nation, file: file, rank: rank)
+                    if cellPolygon(for: pos).contains(point) {
+                        return pos
+                    }
+                }
+            }
+            return nil
+        case .rectangular(let bottom, let top):
+            // 矩形命中：把屏幕坐标反推为 (column 0..8, row 0..9)
             let cs = cellSize
-            let radialFromBorder = radial - apothem  // rank=5 → ~0, rank=1 → ~4cs
-            // rank = 5 - round((radialFromBorder)/cs)，且需在 [1,5]
-            let rankFloat = 5.0 - radialFromBorder / cs
-            let fileFloat = 5.0 + lateral / cs
-            // 命中判定：落在格子中心 ±0.5cs 内
-            let rank = Int((rankFloat + 0.5).rounded(.down))
-            let file = Int((fileFloat + 0.5).rounded(.down))
-            if (1...5).contains(rank) && (1...9).contains(file) {
-                // 再校验确实在该格矩形内（避免边缘溢出误判）
-                let pos = SgPos(nation: nation, file: file, rank: rank)
+            // screenPos: x = (column - 4) * cs, y = (row - 4) * cs - 0.5 * cs
+            // → column = x / cs + 4, row = (y + 0.5*cs) / cs + 4
+            let columnFloat = point.x / cs + 4.0
+            let rowFloat = (point.y + 0.5 * cs) / cs + 4.0
+            let column = Int((columnFloat + 0.5).rounded(.down))
+            let row = Int((rowFloat + 0.5).rounded(.down))
+            guard (0...8).contains(column) && (0...9).contains(row) else { return nil }
+            // row 0..4 → bottom 方；row 5..9 → top 方
+            if row <= 4 {
+                // bottom: column = file - 1, row = rank - 1
+                let file = column + 1
+                let rank = row + 1
+                let pos = SgPos(nation: bottom, file: file, rank: rank)
+                if cellPolygon(for: pos).contains(point) {
+                    return pos
+                }
+            } else {
+                // top: column = 9 - file, row = 10 - rank
+                let file = 9 - column
+                let rank = 10 - row
+                let pos = SgPos(nation: top, file: file, rank: rank)
                 if cellPolygon(for: pos).contains(point) {
                     return pos
                 }
             }
+            return nil
         }
-        return nil
     }
 }
 
