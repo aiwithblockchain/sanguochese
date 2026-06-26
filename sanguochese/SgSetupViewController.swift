@@ -22,6 +22,7 @@
 //
 
 import UIKit
+import SgEngine
 
 class SgSetupViewController: UIViewController {
 

@@ -10,6 +10,7 @@
 import UIKit
 import SpriteKit
 import GameplayKit
+import SgEngine
 
 class GameViewController: UIViewController {
 

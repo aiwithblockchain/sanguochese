@@ -14,6 +14,7 @@
 //
 
 import Foundation
+import SgEngine
 
 /// 解说角色
 public enum SgRole: String, CaseIterable, Codable {

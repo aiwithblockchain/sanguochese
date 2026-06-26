@@ -13,6 +13,7 @@
 //
 
 import Foundation
+import SgEngine
 
 public enum SgBoardDescriber {
 

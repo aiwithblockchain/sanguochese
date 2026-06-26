@@ -196,7 +196,7 @@ public enum SgEvaluator {
 
     // MARK: - 子力
 
-    static func materialValue(of type: SgPieceType) -> Int {
+    public static func materialValue(of type: SgPieceType) -> Int {
         switch type {
         case .king:    return kingValue
         case .rook:    return rookValue

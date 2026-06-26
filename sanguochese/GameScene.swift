@@ -15,6 +15,7 @@
 
 import SpriteKit
 import GameplayKit
+import SgEngine
 
 class GameScene: SKScene {
 

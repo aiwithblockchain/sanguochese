@@ -16,6 +16,7 @@
 //
 
 import SpriteKit
+import SgEngine
 
 public final class SgBoardRenderer {
 

@@ -8,6 +8,7 @@
 
 import XCTest
 @testable import sanguochese
+import SgEngine
 
 final class SgCommentaryTests: XCTestCase {
 

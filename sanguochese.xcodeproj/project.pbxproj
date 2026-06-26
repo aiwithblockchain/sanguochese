@@ -90,6 +90,7 @@
 			);
 			name = sanguochese;
 			packageProductDependencies = (
+				69EAC7B22FEC18B2005A5B36 /* SgEngine */,
 			);
 			productName = sanguochese;
 			productReference = 69EAC65F2FEC18B2005A5B36 /* sanguochese.app */;
@@ -113,6 +114,7 @@
 			);
 			name = sanguocheseTests;
 			packageProductDependencies = (
+				69EAC7B32FEC18B2005A5B36 /* SgEngine */,
 			);
 			productName = sanguocheseTests;
 			productReference = 69EAC7A02FEC18B2005A5B36 /* sanguocheseTests.xctest */;
@@ -150,6 +152,9 @@
 			productRefGroup = 69EAC6602FEC18B2005A5B36 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
+			packageReferences = (
+				69EAC7B12FEC18B2005A5B36 /* XCLocalSwiftPackageReference */,
+			);
 			targets = (
 				69EAC65E2FEC18B2005A5B36 /* sanguochese */,
 				69EAC7A32FEC18B2005A5B36 /* sanguocheseTests */,
@@ -462,6 +467,27 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		69EAC7B12FEC18B2005A5B36 /* XCLocalSwiftPackageReference */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/SgEngine;
+			repositoryURL = "";
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		69EAC7B22FEC18B2005A5B36 /* SgEngine */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 69EAC7B12FEC18B2005A5B36 /* XCLocalSwiftPackageReference */;
+			productName = SgEngine;
+		};
+		69EAC7B32FEC18B2005A5B36 /* SgEngine */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 69EAC7B12FEC18B2005A5B36 /* XCLocalSwiftPackageReference */;
+			productName = SgEngine;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 69EAC6572FEC18B1005A5B36 /* Project object */;
 }
