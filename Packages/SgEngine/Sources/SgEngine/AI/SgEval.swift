@@ -56,6 +56,8 @@ public enum SgEvaluator {
     static let pawnValue   = 100
 
     static let kingSafetyWeight = 80
+    /// 被将军惩罚分（2人对弈），必须远大于任何子力波动
+    static let inCheckPenalty   = 500
     /// 机动性权重：默认 0（关闭）。机动性需 legalMoves，叶节点开销过大。
     /// 如需启用，由搜索层显式传入。
     static var mobilityWeight: Int = 0
@@ -182,7 +184,8 @@ public enum SgEvaluator {
             total += materialValue(of: piece.type)
             total += positionBonus(piece: piece, at: pos, side: side)
         }
-        // 2. 主帅安全：被照面扣分
+        // 2. 主帅安全：仅检测飞将（廉价），真正的将军由 legalMoves 过滤，
+        //    搜索层不应在叶节点做射线扫描（性能杀手）。
         if SgLegality.isKingExposed(side: side, on: board) {
             total -= kingSafetyWeight
         }

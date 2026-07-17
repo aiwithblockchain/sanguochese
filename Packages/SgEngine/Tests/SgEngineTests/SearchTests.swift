@@ -167,6 +167,86 @@ final class SearchTests: XCTestCase {
         XCTAssertNotNil(result.move, "两方阶段搜索应返回走法")
     }
 
+    // MARK: - 将军感知
+
+    /// AI 应能在被将军时找到解围走法，而不是无视威胁
+    func testSearchEscapesCheck() {
+        // 局面：蜀方被魏车将军，蜀帅在 (shu,5,1)，魏车在 (shu,5,3)
+        let board = SgBoard()
+        board.mode = .twoNation(human: .wei, ai: .shu)
+        board.pieces[SgPos(nation: .wei, file: 1, rank: 1)] = SgPiece(type: .king, nation: .wei)
+        board.pieces[SgPos(nation: .shu, file: 5, rank: 1)] = SgPiece(type: .king, nation: .shu)
+        // 魏车在蜀帅正前方将军
+        board.pieces[SgPos(nation: .shu, file: 5, rank: 3)] = SgPiece(type: .rook, nation: .wei)
+        // 给蜀方一个士，可以垫士解围
+        board.pieces[SgPos(nation: .shu, file: 4, rank: 2)] = SgPiece(type: .advisor, nation: .shu)
+        board.setAliveNationsForTesting([.wei, .shu])
+        board.sideToMove = .shu
+        board.recomputeZobrist()
+
+        // 蜀方被将军
+        XCTAssertTrue(SgLegality.isInCheck(side: .shu, on: board), "蜀方应被将军")
+
+        let result = SgSearch.chooseMove(for: .shu, on: board, difficulty: .hard)
+        guard let move = result.move else {
+            XCTFail("被将军时应找到解围走法"); return
+        }
+        // 走完后不应再被将军
+        let captured = board.apply(move)
+        let stillInCheck = SgLegality.isInCheck(side: .shu, on: board)
+        board.undo(move, captured: captured)
+        XCTAssertFalse(stillInCheck, "AI 走完后应解除将军，实际走法: \(move.description)")
+    }
+
+    /// AI 应优先吃掉攻击主帅的棋子（解将还吃）
+    func testSearchPrefersCaptureToEscapeCheck() {
+        // 局面：魏马在蜀九宫内将军蜀帅，蜀有车可以吃马
+        let board = SgBoard()
+        board.mode = .twoNation(human: .wei, ai: .shu)
+        board.pieces[SgPos(nation: .wei, file: 1, rank: 1)] = SgPiece(type: .king, nation: .wei)
+        board.pieces[SgPos(nation: .shu, file: 5, rank: 1)] = SgPiece(type: .king, nation: .shu)
+        // 魏马在 (shu,4,2)，可跳到 (shu,5,1) 吃帅（假设蹩腿不成立）
+        // 实际马在 (shu,4,2)，腿在 (shu,4,1) 或 (shu,3,2) 等... 构造一个明确的马将军
+        // 简化：魏车在 (shu,4,1) 横向将军，蜀车可吃之
+        board.pieces[SgPos(nation: .shu, file: 4, rank: 1)] = SgPiece(type: .rook, nation: .wei)
+        board.pieces[SgPos(nation: .shu, file: 6, rank: 1)] = SgPiece(type: .rook, nation: .shu)
+        board.setAliveNationsForTesting([.wei, .shu])
+        board.sideToMove = .shu
+        board.recomputeZobrist()
+
+        XCTAssertTrue(SgLegality.isInCheck(side: .shu, on: board), "蜀方应被车将军")
+
+        let result = SgSearch.chooseMove(for: .shu, on: board, difficulty: .hard)
+        guard let move = result.move else {
+            XCTFail("应找到解围走法"); return
+        }
+        // 最优解：吃掉将军的车
+        XCTAssertEqual(move.to, SgPos(nation: .shu, file: 4, rank: 1),
+                       "应吃掉将军的车来解围，实际: \(move.description)")
+    }
+
+    /// AI 不应主动走进被将军的位置（送将）
+    func testSearchAvoidsMovingIntoCheck() {
+        // 局面：蜀帅在 (shu,5,1)，魏车在 (shu,5,4)。
+        // 如果蜀帅走到 (shu,5,2)，会被魏车在 (shu,5,4) 沿纵线将军。
+        let board = SgBoard()
+        board.mode = .twoNation(human: .wei, ai: .shu)
+        board.pieces[SgPos(nation: .wei, file: 1, rank: 1)] = SgPiece(type: .king, nation: .wei)
+        board.pieces[SgPos(nation: .shu, file: 5, rank: 1)] = SgPiece(type: .king, nation: .shu)
+        board.pieces[SgPos(nation: .shu, file: 5, rank: 4)] = SgPiece(type: .rook, nation: .wei)
+        board.setAliveNationsForTesting([.wei, .shu])
+        board.sideToMove = .shu
+        board.recomputeZobrist()
+
+        let result = SgSearch.chooseMove(for: .shu, on: board, difficulty: .hard)
+        guard let move = result.move else {
+            XCTFail("应返回合法走法"); return
+        }
+        // 蜀帅不应走到 (shu,5,2) 送将
+        XCTAssertNotEqual(move.to, SgPos(nation: .shu, file: 5, rank: 2),
+                        "不应主动走进被将军的位置")
+    }
+
     // MARK: - 3 人模式回归
 
     func testThreeNationSearchReturnsLegalMove() {
